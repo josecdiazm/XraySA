@@ -7,37 +7,54 @@ results to disk.
 
 from __future__ import annotations
 import os
-import csv
 import numpy as np
 
-CSV_EXTENSION = ".csv"
+PROFILE_EXTENSIONS = (".csv", ".txt")
 
 
 def list_csv_files(folder_path: str) -> list[str]:
-    """Return sorted CSV filenames in *folder_path*."""
+    """Return sorted CSV/TXT profile filenames in *folder_path*."""
     if not folder_path or not os.path.isdir(folder_path):
         raise FileNotFoundError(f"Folder not found: {folder_path}")
 
     names = [
         f for f in os.listdir(folder_path)
-        if f.lower().endswith(CSV_EXTENSION) and os.path.isfile(os.path.join(folder_path, f))
+        if f.lower().endswith(PROFILE_EXTENSIONS) and os.path.isfile(os.path.join(folder_path, f))
     ]
     return sorted(names)
 
 
+def _split_line(line: str) -> list[str]:
+    return line.split(",") if "," in line else line.split()
+
+
 def read_1d_csv(file_path: str) -> dict:
-    """Read a 1-D profile CSV (q/unit,I[,sigma]) into arrays."""
-    with open(file_path, newline="") as fh:
-        reader = csv.reader(fh)
-        header = next(reader)
-        rows = [row for row in reader if row]
+    """
+    Read a 1-D profile (q/unit,I[,sigma]) from a CSV or whitespace-delimited
+    TXT file. Non-numeric lines (headers/comments) are skipped; the first
+    such line's first token is used as the q-unit label.
+    """
+    with open(file_path) as fh:
+        raw_lines = [line.strip() for line in fh if line.strip()]
 
-    unit = header[0]
-    has_sigma = len(header) > 2
+    unit = "q"
+    data_rows = []
+    for line in raw_lines:
+        parts = _split_line(line)
+        try:
+            q_val, I_val = float(parts[0]), float(parts[1])
+        except (ValueError, IndexError):
+            if not data_rows and parts:
+                unit = parts[0].lstrip("#").strip() or unit
+            continue
+        data_rows.append(parts)
 
-    q = np.array([float(r[0]) for r in rows])
-    I = np.array([float(r[1]) for r in rows])
-    sigma = np.array([float(r[2]) for r in rows]) if has_sigma else None
+    if not data_rows:
+        raise ValueError(f"No numeric data found in '{os.path.basename(file_path)}'.")
+
+    q = np.array([float(r[0]) for r in data_rows])
+    I = np.array([float(r[1]) for r in data_rows])
+    sigma = np.array([float(r[2]) for r in data_rows]) if len(data_rows[0]) > 2 else None
 
     return {"q": q, "I": I, "sigma": sigma, "unit": unit}
 

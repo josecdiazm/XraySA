@@ -1,13 +1,14 @@
 
 """
-Dash callbacks for the SWAXS Merging tab.
+Dash callbacks for the SWAXS Merging tab: a generic Average panel and a
+separate Merge panel that loads two previously-saved averaged files.
 """
 
 from __future__ import annotations
 import os
 import numpy as np
 import plotly.graph_objects as go
-from dash import Input, Output, State, callback, html, no_update
+from dash import Input, Output, State, callback, ctx, no_update
 from dash.exceptions import PreventUpdate
 
 from utils.merging_utils import (
@@ -18,6 +19,12 @@ from utils.merging_utils import (
     write_1d_csv,
 )
 from utils.batch_utils import filter_excluded
+from callbacks._shared import register_folder_browse_callback
+
+register_folder_browse_callback("merge-avg-folder-input")
+register_folder_browse_callback("merge-avg-output-folder")
+register_folder_browse_callback("merge-files-folder-input")
+register_folder_browse_callback("merge-save-output-folder")
 
 _UNIT_LABELS = {
     "q_A^-1":  "q (Å⁻¹)",
@@ -42,58 +49,83 @@ def _log_axes_layout(unit: str, **extra) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1.  Per-detector-type averaging callbacks (registered for "saxs" and "waxs")
+# 1.  Average panel: load folder → select files → average → save
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _register_average_callbacks(prefix: str):
+@callback(
+    Output("merge-avg-all-files", "data"),
+    Output("merge-avg-folder-status", "children"),
+    Input("merge-avg-load-folder-btn", "n_clicks"),
+    State("merge-avg-folder-input", "value"),
+    prevent_initial_call=True,
+)
+def load_avg_folder(n_clicks, folder_path):
+    if not n_clicks:
+        raise PreventUpdate
+    try:
+        files = list_csv_files(folder_path)
+    except Exception as exc:
+        return [], f"✘ {exc}"
+    if not files:
+        return [], f"No CSV/TXT files found in '{folder_path}'."
+    return files, f"✔ Found {len(files)} file(s)."
 
-    @callback(
-        Output(f"merge-{prefix}-all-files", "data"),
-        Output(f"merge-{prefix}-folder-status", "children"),
-        Input(f"merge-{prefix}-load-folder-btn", "n_clicks"),
-        State(f"merge-{prefix}-folder-input", "value"),
-        prevent_initial_call=True,
-    )
-    def load_folder(n_clicks, folder_path):
-        if not n_clicks:
-            raise PreventUpdate
+
+@callback(
+    Output("merge-avg-file-checklist", "options"),
+    Output("merge-avg-file-checklist", "value"),
+    Output("merge-avg-file-count", "children"),
+    Input("merge-avg-all-files", "data"),
+    Input("merge-avg-exclude-input", "value"),
+)
+def apply_avg_exclusion_filter(all_files, exclude_text):
+    if not all_files:
+        return [], [], "No files loaded yet."
+
+    keywords = (exclude_text or "").split(",")
+    kept = filter_excluded(all_files, keywords)
+
+    options = [{"label": f, "value": f} for f in kept]
+    count_text = f"{len(kept)} of {len(all_files)} file(s) selected."
+    return options, kept, count_text
+
+
+# A single callback owns merge-avg-graph/-avg-store so there's never more
+# than one writer per output (avoids allow_duplicate entirely).
+@callback(
+    Output("merge-avg-store", "data"),
+    Output("merge-avg-graph", "figure"),
+    Output("merge-avg-folder-status", "children", allow_duplicate=True),
+    Input("merge-avg-file-checklist", "value"),
+    Input("merge-avg-average-btn", "n_clicks"),
+    State("merge-avg-folder-input", "value"),
+    prevent_initial_call=True,
+)
+def update_avg_graph(selected, avg_clicks, folder_path):
+    trigger = ctx.triggered_id
+
+    if trigger == "merge-avg-file-checklist":
+        if not selected:
+            return no_update, go.Figure(), no_update
         try:
-            files = list_csv_files(folder_path)
-        except Exception as exc:
-            return [], f"✘ {exc}"
-        if not files:
-            return [], f"No CSV files found in '{folder_path}'."
-        return files, f"✔ Found {len(files)} file(s)."
+            profiles = [read_1d_csv(os.path.join(folder_path, f)) for f in selected]
+        except Exception:
+            raise PreventUpdate
 
-    @callback(
-        Output(f"merge-{prefix}-file-checklist", "options"),
-        Output(f"merge-{prefix}-file-checklist", "value"),
-        Output(f"merge-{prefix}-file-count", "children"),
-        Input(f"merge-{prefix}-all-files", "data"),
-        Input(f"merge-{prefix}-exclude-input", "value"),
-    )
-    def apply_exclusion_filter(all_files, exclude_text):
-        if not all_files:
-            return [], [], "No files loaded yet."
+        fig = go.Figure()
+        unit = "q"
+        for p, fname in zip(profiles, selected):
+            unit = p["unit"]
+            fig.add_trace(go.Scatter(x=p["q"], y=p["I"], mode="lines", name=fname))
+        fig.update_layout(**_log_axes_layout(
+            unit,
+            legend=dict(orientation="v", x=1.02, y=1, xanchor="left", font=dict(size=10)),
+            margin=dict(l=10, r=140, t=20, b=10),
+        ))
+        return no_update, fig, no_update
 
-        keywords = (exclude_text or "").split(",")
-        kept = filter_excluded(all_files, keywords)
-
-        options = [{"label": f, "value": f} for f in kept]
-        count_text = f"{len(kept)} of {len(all_files)} file(s) selected."
-        return options, kept, count_text
-
-    @callback(
-        Output(f"merge-{prefix}-avg-store", "data"),
-        Output(f"merge-{prefix}-avg-graph", "figure"),
-        Output(f"merge-{prefix}-folder-status", "children", allow_duplicate=True),
-        Input(f"merge-{prefix}-average-btn", "n_clicks"),
-        State(f"merge-{prefix}-file-checklist", "value"),
-        State(f"merge-{prefix}-folder-input", "value"),
-        prevent_initial_call=True,
-    )
-    def average_selected(n_clicks, selected, folder_path):
-        if not n_clicks:
+    if trigger == "merge-avg-average-btn":
+        if not avg_clicks:
             raise PreventUpdate
         if not selected:
             return no_update, no_update, "✘ Select at least one file to average."
@@ -121,42 +153,89 @@ def _register_average_callbacks(prefix: str):
         data = {"q": avg["q"].tolist(), "I": avg["I"].tolist(), "unit": avg["unit"]}
         return data, fig, f"✔ Averaged {len(selected)} file(s)."
 
-    @callback(
-        Output(f"merge-{prefix}-avg-store", "data", allow_duplicate=True),
-        Output(f"merge-{prefix}-avg-graph", "figure", allow_duplicate=True),
-        Output(f"merge-{prefix}-folder-status", "children", allow_duplicate=True),
-        Input(f"merge-{prefix}-load-file-btn", "n_clicks"),
-        State(f"merge-{prefix}-load-file-input", "value"),
-        prevent_initial_call=True,
-    )
-    def load_averaged_file(n_clicks, file_path):
-        if not n_clicks:
-            raise PreventUpdate
-        if not file_path:
-            return no_update, no_update, "✘ Enter a file path first."
-
-        try:
-            profile = read_1d_csv(file_path)
-        except Exception as exc:
-            return no_update, no_update, f"✘ Could not load file: {exc}"
-
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=profile["q"], y=profile["I"], mode="lines",
-            line=dict(width=2, color="crimson"), name="Loaded",
-        ))
-        fig.update_layout(**_log_axes_layout(profile["unit"]))
-
-        data = {"q": profile["q"].tolist(), "I": profile["I"].tolist(), "unit": profile["unit"]}
-        return data, fig, f"✔ Loaded '{os.path.basename(file_path)}'."
+    raise PreventUpdate
 
 
-_register_average_callbacks("saxs")
-_register_average_callbacks("waxs")
+@callback(
+    Output("merge-avg-save-status", "children"),
+    Input("merge-avg-save-btn", "n_clicks"),
+    State("merge-avg-store", "data"),
+    State("merge-avg-filename", "value"),
+    State("merge-avg-output-folder", "value"),
+    prevent_initial_call=True,
+)
+def save_average(n_clicks, avg_data, filename, output_folder):
+    if not n_clicks:
+        raise PreventUpdate
+    if not avg_data:
+        return "✘ Nothing to save yet — average some files first."
+    if not filename or not output_folder:
+        return "✘ Enter a filename and an output folder."
+
+    profile = {"q": np.array(avg_data["q"]), "I": np.array(avg_data["I"]), "unit": avg_data["unit"]}
+    try:
+        out_path = write_1d_csv(profile, output_folder, filename)
+    except Exception as exc:
+        return f"✘ {exc}"
+    return f"✔ Saved {out_path}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2.  Live overlay of scaled SAXS + WAXS curves
+# 2.  Merge panel: browse folder → pick SAXS/WAXS files → load
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("merge-files-all", "data"),
+    Output("merge-files-folder-status", "children"),
+    Output("merge-saxs-select", "options"),
+    Output("merge-waxs-select", "options"),
+    Input("merge-files-load-folder-btn", "n_clicks"),
+    State("merge-files-folder-input", "value"),
+    prevent_initial_call=True,
+)
+def load_files_folder(n_clicks, folder_path):
+    if not n_clicks:
+        raise PreventUpdate
+    try:
+        files = list_csv_files(folder_path)
+    except Exception as exc:
+        return [], f"✘ {exc}", [], []
+    if not files:
+        return [], f"No CSV/TXT files found in '{folder_path}'.", [], []
+
+    options = [{"label": f, "value": f} for f in files]
+    return files, f"✔ Found {len(files)} file(s).", options, options
+
+
+@callback(
+    Output("merge-saxs-avg-store", "data"),
+    Output("merge-waxs-avg-store", "data"),
+    Output("merge-files-folder-status", "children", allow_duplicate=True),
+    Input("merge-load-both-btn", "n_clicks"),
+    State("merge-saxs-select", "value"),
+    State("merge-waxs-select", "value"),
+    State("merge-files-folder-input", "value"),
+    prevent_initial_call=True,
+)
+def load_both_files(n_clicks, saxs_file, waxs_file, folder_path):
+    if not n_clicks:
+        raise PreventUpdate
+    if not saxs_file or not waxs_file:
+        return no_update, no_update, "✘ Select both a SAXS file and a WAXS file."
+
+    try:
+        saxs = read_1d_csv(os.path.join(folder_path, saxs_file))
+        waxs = read_1d_csv(os.path.join(folder_path, waxs_file))
+    except Exception as exc:
+        return no_update, no_update, f"✘ Could not load file(s): {exc}"
+
+    saxs_data = {"q": saxs["q"].tolist(), "I": saxs["I"].tolist(), "unit": saxs["unit"]}
+    waxs_data = {"q": waxs["q"].tolist(), "I": waxs["I"].tolist(), "unit": waxs["unit"]}
+    return saxs_data, waxs_data, f"✔ Loaded '{saxs_file}' and '{waxs_file}'."
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3.  Live overlay of scaled SAXS + WAXS curves
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
@@ -189,7 +268,7 @@ def update_overlay(saxs_data, waxs_data, saxs_scale, waxs_scale):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  Auto-fill splice q with the SAXS profile's max q
+# 4.  Auto-fill splice q with the SAXS profile's max q
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
@@ -204,7 +283,7 @@ def autofill_splice_q(saxs_data):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4.  Merge button
+# 5.  Merge button
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
@@ -247,42 +326,28 @@ def do_merge(n_clicks, saxs_data, waxs_data, saxs_scale, waxs_scale, splice_q):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5.  Save selected outputs
+# 6.  Save merged profile
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
     Output("merge-save-status", "children"),
-    Input("merge-save-btn", "n_clicks"),
-    State("merge-save-checklist", "value"),
-    State("merge-save-output-folder", "value"),
-    State("merge-saxs-avg-store", "data"),
-    State("merge-waxs-avg-store", "data"),
+    Input("merge-save-merged-btn", "n_clicks"),
     State("merge-merged-store", "data"),
+    State("merge-merged-filename", "value"),
+    State("merge-save-output-folder", "value"),
     prevent_initial_call=True,
 )
-def save_selected(n_clicks, selected, output_folder, saxs_data, waxs_data, merged_data):
+def save_merged(n_clicks, merged_data, filename, output_folder):
     if not n_clicks:
         raise PreventUpdate
-    if not selected or not output_folder:
-        return "✘ Select at least one item and an output folder."
+    if not merged_data:
+        return "✘ Nothing to save yet — merge the profiles first."
+    if not filename or not output_folder:
+        return "✘ Enter a filename and an output folder."
 
-    mapping = {
-        "avg_saxs": (saxs_data, "averaged_SAXS.csv"),
-        "avg_waxs": (waxs_data, "averaged_WAXS.csv"),
-        "merged":   (merged_data, "merged_SWAXS.csv"),
-    }
-
-    lines = []
-    for key in selected:
-        data, filename = mapping[key]
-        if not data:
-            lines.append(f"✘ {filename}: no data available yet")
-            continue
-        profile = {"q": np.array(data["q"]), "I": np.array(data["I"]), "unit": data["unit"]}
-        try:
-            out_path = write_1d_csv(profile, output_folder, filename)
-            lines.append(f"✔ Saved {os.path.basename(out_path)}")
-        except Exception as exc:
-            lines.append(f"✘ {filename}: {exc}")
-
-    return [html.Div(line) for line in lines]
+    profile = {"q": np.array(merged_data["q"]), "I": np.array(merged_data["I"]), "unit": merged_data["unit"]}
+    try:
+        out_path = write_1d_csv(profile, output_folder, filename)
+    except Exception as exc:
+        return f"✘ {exc}"
+    return f"✔ Saved {out_path}"

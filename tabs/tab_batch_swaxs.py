@@ -9,6 +9,8 @@ Scattering 2D & 1D tab.
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
+from tabs._shared import folder_picker
+
 _SECTION_STYLE = {
     "backgroundColor": "#f8f9fa",
     "borderRadius": "6px",
@@ -48,12 +50,7 @@ def layout():
                     [
                         _section(
                             "📁 Input folder",
-                            dcc.Input(
-                                id="batch-folder-input",
-                                type="text",
-                                placeholder="/path/to/folder",
-                                style={"width": "100%"},
-                            ),
+                            folder_picker("batch-folder-input"),
                             dbc.Button(
                                 "Load Folder", id="batch-load-folder-btn",
                                 color="primary", size="sm", className="mt-2",
@@ -107,12 +104,7 @@ def layout():
 
                         _section(
                             "💾 Output folder",
-                            dcc.Input(
-                                id="batch-output-folder",
-                                type="text",
-                                placeholder="/path/to/output",
-                                style={"width": "100%"},
-                            ),
+                            folder_picker("batch-output-folder", "/path/to/output"),
                         ),
 
                         dbc.Button(

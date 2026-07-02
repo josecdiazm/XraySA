@@ -1,11 +1,16 @@
 
 """
-Dash layout for the SWAXS Merging tab: average repeated SAXS/WAXS
-1-D scans, scale and splice them together, and save the results.
+Dash layout for the SWAXS Merging tab:
+  - Average panel: average any set of 1-D scans (SAXS, WAXS, or a mix)
+    and save the result.
+  - Merge panel: load two previously-saved averaged files from a folder,
+    scale/splice them together, and save the merged profile.
 """
 
 from dash import dcc, html
 import dash_bootstrap_components as dbc
+
+from tabs._shared import folder_picker
 
 _SECTION_STYLE = {
     "backgroundColor": "#f8f9fa",
@@ -22,77 +27,106 @@ def _section(title, *children):
     )
 
 
-def _average_section(prefix: str, label: str):
-    """Folder-scan + average UI for one detector type (saxs / waxs)."""
-    return dbc.Col(
-        _section(
-            f"📊 Average {label}",
+def _average_panel():
+    return _section(
+        "📊 Average",
 
-            dcc.Store(id=f"merge-{prefix}-all-files", data=[]),
+        dcc.Store(id="merge-avg-all-files", data=[]),
+        dcc.Store(id="merge-avg-store"),
 
-            dcc.Input(
-                id=f"merge-{prefix}-folder-input", type="text",
-                placeholder="/path/to/folder", style={"width": "100%"},
-            ),
-            dbc.Button(
-                "Load Folder", id=f"merge-{prefix}-load-folder-btn",
-                color="primary", size="sm", className="mt-2",
-            ),
-            html.Div(id=f"merge-{prefix}-folder-status",
-                     style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
-
-            html.Div("Exclude files containing:",
-                     style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "10px"}),
-            dcc.Input(
-                id=f"merge-{prefix}-exclude-input", type="text",
-                placeholder="e.g. dry, beamstop", debounce=True,
-                style={"width": "100%"},
-            ),
-
-            html.Div(id=f"merge-{prefix}-file-count",
-                     style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "10px"}),
-            dcc.Checklist(
-                id=f"merge-{prefix}-file-checklist",
-                options=[], value=[],
-                inputStyle={"marginRight": "6px"},
-                labelStyle={"display": "block"},
-                style={"maxHeight": "160px", "overflowY": "auto", "fontSize": "0.85rem"},
-            ),
-
-            dbc.Button(
-                "Average Selected", id=f"merge-{prefix}-average-btn",
-                color="success", size="sm", className="mt-3 mb-2",
-            ),
-
-            dcc.Graph(
-                id=f"merge-{prefix}-avg-graph",
-                style={"height": "320px"},
-                config={"displayModeBar": False},
-            ),
-
-            html.Hr(),
-            html.Div("Or load a previously averaged CSV:",
-                     style={"fontSize": "0.8rem", "color": "#6c757d", "marginBottom": "6px"}),
-            dcc.Input(
-                id=f"merge-{prefix}-load-file-input", type="text",
-                placeholder="/path/to/averaged_file.csv", style={"width": "100%"},
-            ),
-            dbc.Button(
-                "Load File", id=f"merge-{prefix}-load-file-btn",
-                color="secondary", size="sm", outline=True, className="mt-2",
-            ),
+        folder_picker("merge-avg-folder-input"),
+        dbc.Button(
+            "Load Folder", id="merge-avg-load-folder-btn",
+            color="primary", size="sm", className="mt-2",
         ),
-        width=6,
+        html.Div(id="merge-avg-folder-status",
+                 style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
+
+        html.Div("Exclude files containing:",
+                 style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "10px"}),
+        dcc.Input(
+            id="merge-avg-exclude-input", type="text",
+            placeholder="e.g. dry, beamstop", debounce=True,
+            style={"width": "100%"},
+        ),
+
+        html.Div(id="merge-avg-file-count",
+                 style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "10px"}),
+        dcc.Checklist(
+            id="merge-avg-file-checklist",
+            options=[], value=[],
+            inputStyle={"marginRight": "6px"},
+            labelStyle={"display": "block"},
+            style={"maxHeight": "160px", "overflowY": "auto", "fontSize": "0.85rem"},
+        ),
+
+        dbc.Button(
+            "Average Selected", id="merge-avg-average-btn",
+            color="success", size="sm", className="mt-3 mb-2",
+        ),
+
+        dcc.Graph(
+            id="merge-avg-graph",
+            style={"height": "600px"},
+            config={"displayModeBar": True},
+        ),
+
+        html.Hr(),
+        html.Div("Save average:", style={"fontSize": "0.85rem", "fontWeight": "500", "marginBottom": "6px"}),
+        dbc.Row([
+            dbc.Col(
+                dcc.Input(id="merge-avg-filename", type="text", value="averaged.csv",
+                          style={"width": "100%"}),
+                width=4,
+            ),
+            dbc.Col(folder_picker("merge-avg-output-folder", "/path/to/output"), width=6),
+            dbc.Col(
+                dbc.Button("Save Average", id="merge-avg-save-btn", color="success",
+                           className="w-100"),
+                width=2,
+            ),
+        ], className="g-2"),
+        html.Div(id="merge-avg-save-status",
+                 style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
     )
 
 
-def _merge_section():
+def _merge_panel():
     return _section(
         "🔗 Merge",
 
+        dcc.Store(id="merge-files-all", data=[]),
+        dcc.Store(id="merge-saxs-avg-store"),
+        dcc.Store(id="merge-waxs-avg-store"),
+        dcc.Store(id="merge-merged-store"),
+
+        folder_picker("merge-files-folder-input", "/path/to/averaged files"),
+        dbc.Button(
+            "Load Folder", id="merge-files-load-folder-btn",
+            color="primary", size="sm", className="mt-2",
+        ),
+        html.Div(id="merge-files-folder-status",
+                 style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
+
+        dbc.Row([
+            dbc.Col([
+                html.Label("SAXS file", style={"fontSize": "0.85rem"}),
+                dcc.Dropdown(id="merge-saxs-select", options=[], placeholder="Select SAXS file"),
+            ], width=6),
+            dbc.Col([
+                html.Label("WAXS file", style={"fontSize": "0.85rem"}),
+                dcc.Dropdown(id="merge-waxs-select", options=[], placeholder="Select WAXS file"),
+            ], width=6),
+        ], className="mt-2"),
+
+        dbc.Button(
+            "Load Selected", id="merge-load-both-btn",
+            color="secondary", size="sm", className="mt-2 mb-2",
+        ),
+
         dcc.Graph(
             id="merge-overlay-graph",
-            style={"height": "380px"},
+            style={"height": "450px"},
             config={"displayModeBar": True},
         ),
 
@@ -118,37 +152,27 @@ def _merge_section():
 
         dcc.Graph(
             id="merge-merged-graph",
-            style={"height": "380px"},
+            style={"height": "450px"},
             config={"displayModeBar": True},
         ),
-    )
 
-
-def _save_section():
-    return _section(
-        "💾 Save",
-
-        dcc.Checklist(
-            id="merge-save-checklist",
-            options=[
-                {"label": " Averaged SAXS", "value": "avg_saxs"},
-                {"label": " Averaged WAXS", "value": "avg_waxs"},
-                {"label": " Merged profile", "value": "merged"},
-            ],
-            value=[],
-            inputStyle={"marginRight": "6px"},
-            labelStyle={"display": "block", "marginBottom": "4px"},
-        ),
-
-        dcc.Input(
-            id="merge-save-output-folder", type="text",
-            placeholder="/path/to/output", style={"width": "100%", "marginTop": "8px"},
-        ),
-
-        dbc.Button("Save Selected", id="merge-save-btn", color="success", className="mt-3"),
-
+        html.Hr(),
+        html.Div("Save merged profile:", style={"fontSize": "0.85rem", "fontWeight": "500", "marginBottom": "6px"}),
+        dbc.Row([
+            dbc.Col(
+                dcc.Input(id="merge-merged-filename", type="text", value="merged_SWAXS.csv",
+                          style={"width": "100%"}),
+                width=4,
+            ),
+            dbc.Col(folder_picker("merge-save-output-folder", "/path/to/output"), width=6),
+            dbc.Col(
+                dbc.Button("Save Merged", id="merge-save-merged-btn", color="success",
+                           className="w-100"),
+                width=2,
+            ),
+        ], className="g-2"),
         html.Div(id="merge-save-status",
-                 style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "10px"}),
+                 style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
     )
 
 
@@ -157,25 +181,17 @@ def layout():
         fluid=True,
         children=[
 
-            dcc.Store(id="merge-saxs-avg-store"),
-            dcc.Store(id="merge-waxs-avg-store"),
-            dcc.Store(id="merge-merged-store"),
-
             html.H4("SWAXS Merging", style={"margin": "16px 0 4px"}),
             html.P(
-                "Average repeated SAXS/WAXS 1-D scans, scale and splice them "
-                "into one continuous profile, then save the results.",
+                "Average a set of 1-D scans and save the result, then merge "
+                "previously-saved averaged SAXS/WAXS profiles into one "
+                "continuous curve.",
                 style={"color": "#6c757d"},
             ),
             html.Hr(style={"marginTop": "4px"}),
 
-            dbc.Row([
-                _average_section("saxs", "SAXS"),
-                _average_section("waxs", "WAXS"),
-            ]),
-
-            _merge_section(),
-            _save_section(),
+            _average_panel(),
+            _merge_panel(),
         ],
     )
 

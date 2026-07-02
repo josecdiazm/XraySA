@@ -12,6 +12,10 @@ from dash.exceptions import PreventUpdate
 
 from utils.scattering_utils import build_integrator, energy_to_wavelength
 from utils.batch_utils import list_folder_images, filter_excluded, process_file_1d, process_file_2d_png
+from callbacks._shared import register_folder_browse_callback
+
+register_folder_browse_callback("batch-folder-input")
+register_folder_browse_callback("batch-output-folder")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
