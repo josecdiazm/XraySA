@@ -102,6 +102,9 @@ _PROGRESS_OUTPUTS = [
         State("scat-azimuth-min", "value"),
         State("scat-azimuth-max", "value"),
         State("scat-error-model", "value"),
+        # Q Range
+        State("scat-qrange-min", "value"),
+        State("scat-qrange-max", "value"),
         # Display options
         State("scat-colorscale-dropdown", "value"),
         State("scat-log-toggle", "value"),
@@ -130,6 +133,7 @@ def run_batch(
     mask_low, mask_high,
     az_min, az_max,
     error_model,
+    q_range_min, q_range_max,
     colorscale,
     log_scale,
 ):
@@ -183,6 +187,7 @@ def run_batch(
                     mask_low=mask_low, mask_high=mask_high,
                     azimuth_range=az_range,
                     error_model=error_model or None,
+                    q_min=q_range_min, q_max=q_range_max,
                     output_dir=output_folder,
                 )
             log_lines.append(f"✔ {fname} → {os.path.basename(out_path)}")

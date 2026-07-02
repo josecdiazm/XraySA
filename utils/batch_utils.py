@@ -63,7 +63,8 @@ def load_image_from_disk(file_path: str) -> np.ndarray:
 
 
 def process_file_1d(file_path: str, ai, *, n_points, unit, mask_low, mask_high,
-                     azimuth_range, error_model, output_dir: str) -> str:
+                     azimuth_range, error_model, q_min=None, q_max=None,
+                     output_dir: str) -> str:
     """Integrate one file to a 1-D profile and save it as CSV. Returns the output path."""
     arr = load_image_from_disk(file_path)
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
@@ -76,6 +77,12 @@ def process_file_1d(file_path: str, ai, *, n_points, unit, mask_low, mask_high,
         azimuth_range=azimuth_range,
         error_model=error_model,
     )
+
+    if q_min is not None and q_max is not None:
+        keep = (q >= q_min) & (q <= q_max)
+        q, I = q[keep], I[keep]
+        if sigma is not None:
+            sigma = sigma[keep]
 
     stem = os.path.splitext(os.path.basename(file_path))[0]
     out_path = os.path.join(output_dir, f"{stem}_1D.csv")
