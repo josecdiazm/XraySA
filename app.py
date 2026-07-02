@@ -19,6 +19,7 @@ import callbacks.callbacks_scattering_2d
 import callbacks.callbacks_ptable
 import callbacks.callbacks_transmission
 import callbacks.callbacks_batch_swaxs
+import callbacks.callbacks_merging
 
 # ── Background callback manager (for batch progress) ──────────────────────────
 _cache = diskcache.Cache("./cache")
@@ -55,7 +56,7 @@ app.layout = dbc.Container(
                 dbc.Tab(label="Grazing Incidence (GI-SWAXS)",tab_id="tab-gisaxs",       children=gisaxs_layout),
                 dbc.Tab(label="Resonant Scattering",         tab_id="tab-resonant",     children=resonant_layout),
                 dbc.Tab(label="Batch SWAXS",                 tab_id="tab-batch-swaxs",  children=batch_swaxs_layout),
-                dbc.Tab(label="SAXS/WAXS Merging",           tab_id="tab-merging",      children=merging_layout),
+                dbc.Tab(label="SWAXS Merging",                tab_id="tab-merging",      children=merging_layout),
             ],
         ),
     ],
