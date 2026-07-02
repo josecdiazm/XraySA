@@ -5,3 +5,7 @@ numpy
 xraydb
 pyFAI
 fabio
+diskcache
+kaleido
+psutil
+multiprocess
