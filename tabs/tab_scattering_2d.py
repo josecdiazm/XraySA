@@ -328,6 +328,58 @@ def _wedge_section():
     )
 
 
+def _pixel_mask_section():
+    return _section(
+        "🎯 Hot Pixel Masking",
+
+        html.Div([
+            _label("Shape"),
+            dcc.RadioItems(
+                id="scat-pixmask-shape",
+                options=[
+                    {"label": " Square", "value": "square"},
+                    {"label": " Circle", "value": "circle"},
+                ],
+                value="square",
+                inline=True,
+                inputStyle={"marginRight": "4px"},
+                labelStyle={"marginRight": "14px"},
+            ),
+        ], style=_ROW_STYLE),
+
+        html.Div([
+            _label("Center row (px)"),
+            dcc.Input(id="scat-pixmask-row", type="number", placeholder="row",
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+
+        html.Div([
+            _label("Center col (px)"),
+            dcc.Input(id="scat-pixmask-col", type="number", placeholder="col",
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+
+        html.Div([
+            _label("Size (px)"),
+            dcc.Input(id="scat-pixmask-size", type="number", value=3, min=1, step=1,
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div(
+            "Size = half-width for square, radius for circle.",
+            style={"fontSize": "0.78rem", "color": "#6c757d", "marginBottom": "8px"},
+        ),
+
+        html.Div([
+            dbc.Button("+ Add region", id="scat-pixmask-add-btn", color="secondary",
+                       size="sm", className="me-2"),
+            dbc.Button("Clear all", id="scat-pixmask-clear-btn", color="danger",
+                       outline=True, size="sm"),
+        ], style={"marginBottom": "10px"}),
+
+        html.Div(id="scat-pixmask-list"),
+    )
+
+
 def _q_range_section():
     return _section(
         "🔍 Q Range",
@@ -380,6 +432,7 @@ def layout():
             dcc.Store(id="scat-integration-store"),
             dcc.Store(id="scat-q-data-store"),    # full q and I arrays from integration
             dcc.Store(id="scat-qrange-store"),    # currently applied q min/max
+            dcc.Store(id="scat-pixel-mask-store", data=[]),  # hot-pixel mask regions
             dcc.Download(id="scat-download"),
             
 
@@ -401,6 +454,7 @@ def layout():
                         _q_range_section(),
                         _display_section(),
                         _wedge_section(),
+                        _pixel_mask_section(),
                     ],
                     width=3,
                     style={"overflowY": "auto", "maxHeight": "92vh", "paddingRight": "8px"},

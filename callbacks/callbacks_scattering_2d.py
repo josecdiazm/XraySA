@@ -6,8 +6,9 @@ Dash callbacks for the 2-D scattering viewer / 1-D integrator panel.
 from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
-from dash import Input, Output, State, callback, no_update, ctx
+from dash import Input, Output, State, ALL, callback, no_update, ctx, html
 from dash.exceptions import PreventUpdate
+import dash_bootstrap_components as dbc
 
 import io
 import base64
@@ -19,6 +20,7 @@ import pyFAI
 from utils.scattering_utils import (
     decode_upload,
     apply_threshold_mask,
+    build_pixel_mask,
     build_integrator,
     integrate_1d,
     integrate_2d,
@@ -72,16 +74,18 @@ def store_uploaded_image(contents, filename):
     Input("scat-log-toggle", "value"),
     Input("scat-mask-low", "value"),
     Input("scat-mask-high", "value"),
+    Input("scat-pixel-mask-store", "data"),
     prevent_initial_call=True,
 )
-def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high):
+def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixel_mask_regions):
     if image_data is None:
         raise PreventUpdate
 
     arr = np.array(image_data, dtype=float)
 
-    # Apply threshold mask — set masked pixels to NaN so they show as blank
+    # Apply threshold + hot-pixel mask — set masked pixels to NaN so they show as blank
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
+    mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
     display = arr.copy()
     display[mask] = np.nan
 
@@ -120,6 +124,19 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high):
         yaxis_title="Pixel (row)",
         uirevision="scat-2d",
     )
+
+    # Outline each defined hot-pixel region so its placement is visible
+    # even where the NaN gap alone would be hard to spot.
+    for region in (pixel_mask_regions or []):
+        row, col, size = region.get("row"), region.get("col"), region.get("size")
+        if row is None or col is None or not size:
+            continue
+        fig.add_shape(
+            type="circle" if region.get("shape") == "circle" else "rect",
+            x0=col - size, x1=col + size,
+            y0=row - size, y1=row + size,
+            line=dict(color="red", width=1.5, dash="dot"),
+        )
 
     return fig
 
@@ -164,6 +181,7 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high):
     State("scat-log-x-toggle", "value"),
     State("scat-wedge-qmin", "value"),
     State("scat-wedge-qmax", "value"),
+    State("scat-pixel-mask-store", "data"),
     prevent_initial_call=True,
 )
 def run_integration(
@@ -187,6 +205,7 @@ def run_integration(
     log_x,
     wedge_qmin,
     wedge_qmax,
+    pixel_mask_regions,
 ):
     if not n_clicks or image_data is None:
         raise PreventUpdate
@@ -223,6 +242,7 @@ def run_integration(
 
     # ── Mask ─────────────────────────────────────────────────────────────────
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
+    mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
 
     # ── Azimuth range ────────────────────────────────────────────────────────
     az_range = None
@@ -491,6 +511,7 @@ def apply_q_range(n_clicks, q_min, q_max):
     State("scat-mask-high", "value"),
     State("scat-colorscale-dropdown", "value"),
     State("scat-log-toggle", "value"),
+    State("scat-pixel-mask-store", "data"),
     prevent_initial_call=True,
 )
 def run_cake(
@@ -502,6 +523,7 @@ def run_cake(
     n_pts, unit,
     mask_low, mask_high,
     colorscale, log_scale,
+    pixel_mask_regions,
 ):
     if not n_clicks or image_data is None:
         raise PreventUpdate
@@ -532,6 +554,7 @@ def run_cake(
         return _error_figure(f"Integrator error: {exc}")
 
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
+    mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
 
     try:
         I2d, q_ax, chi_ax = integrate_2d(
@@ -669,7 +692,82 @@ def overlay_beam_centre(show, bcx, bcy, current_fig):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8.  
+# 8.  Hot-pixel mask region management (add / remove / clear)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("scat-pixel-mask-store", "data"),
+    Input("scat-pixmask-add-btn", "n_clicks"),
+    Input("scat-pixmask-clear-btn", "n_clicks"),
+    Input({"type": "scat-pixmask-remove", "index": ALL}, "n_clicks"),
+    State("scat-pixmask-shape", "value"),
+    State("scat-pixmask-row", "value"),
+    State("scat-pixmask-col", "value"),
+    State("scat-pixmask-size", "value"),
+    State("scat-pixel-mask-store", "data"),
+    prevent_initial_call=True,
+)
+def manage_pixel_mask_regions(add_clicks, clear_clicks, remove_clicks,
+                               shape, row, col, size, regions):
+    regions = list(regions or [])
+    trigger = ctx.triggered_id
+
+    if trigger == "scat-pixmask-clear-btn":
+        return []
+
+    if trigger == "scat-pixmask-add-btn":
+        if row is None or col is None or not size:
+            raise PreventUpdate
+        regions.append({
+            "shape": shape or "square",
+            "row": float(row),
+            "col": float(col),
+            "size": float(size),
+        })
+        return regions
+
+    if isinstance(trigger, dict) and trigger.get("type") == "scat-pixmask-remove":
+        idx = trigger["index"]
+        if 0 <= idx < len(regions):
+            regions.pop(idx)
+        return regions
+
+    raise PreventUpdate
+
+
+@callback(
+    Output("scat-pixmask-list", "children"),
+    Input("scat-pixel-mask-store", "data"),
+)
+def render_pixel_mask_list(regions):
+    if not regions:
+        return html.Div(
+            "No hot-pixel regions defined.",
+            style={"color": "#6c757d", "fontStyle": "italic", "fontSize": "0.85rem"},
+        )
+
+    rows = []
+    for i, region in enumerate(regions):
+        icon = "●" if region.get("shape") == "circle" else "■"
+        rows.append(html.Div([
+            html.Span(
+                f"{icon} row={region['row']:.0f}, col={region['col']:.0f}, "
+                f"size={region['size']:.0f}",
+                style={"fontSize": "0.85rem"},
+            ),
+            dbc.Button("✕", id={"type": "scat-pixmask-remove", "index": i},
+                       color="danger", outline=True, size="sm",
+                       style={"padding": "0px 6px", "fontSize": "0.75rem"}),
+        ], style={
+            "display": "flex", "alignItems": "center", "justifyContent": "space-between",
+            "marginBottom": "4px", "padding": "4px 8px",
+            "backgroundColor": "#ffffff", "borderRadius": "4px", "border": "1px solid #dee2e6",
+        }))
+    return rows
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8.5.
 # ─────────────────────────────────────────────────────────────────────────────
 
 

@@ -77,6 +77,45 @@ def apply_threshold_mask(
     return mask
 
 
+def build_pixel_mask(
+    shape: tuple[int, int],
+    regions: list[dict] | None,
+) -> np.ndarray:
+    """
+    Build a boolean mask (True = pixel is INVALID / masked) from a list of
+    user-defined hot-pixel regions, e.g. for masking known hot/dead pixels
+    that aren't caught by a simple intensity threshold.
+
+    Each region dict has keys:
+        shape : "square" or "circle"
+        row   : centre row (pixel)
+        col   : centre column (pixel)
+        size  : half-width in pixels for "square", radius in pixels for "circle"
+    """
+    mask = np.zeros(shape, dtype=bool)
+    if not regions:
+        return mask
+
+    ny, nx = shape
+    Y, X = np.ogrid[:ny, :nx]
+
+    for region in regions:
+        row, col, size = region.get("row"), region.get("col"), region.get("size")
+        if row is None or col is None or not size:
+            continue
+
+        if region.get("shape") == "circle":
+            mask |= (X - col) ** 2 + (Y - row) ** 2 <= size ** 2
+        else:
+            r0 = max(int(round(row - size)), 0)
+            r1 = min(int(round(row + size)) + 1, ny)
+            c0 = max(int(round(col - size)), 0)
+            c1 = min(int(round(col + size)) + 1, nx)
+            mask[r0:r1, c0:c1] = True
+
+    return mask
+
+
 # ── Azimuthal integration ─────────────────────────────────────────────────────
 
 def build_integrator(
