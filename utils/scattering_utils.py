@@ -126,8 +126,9 @@ def build_integrator(
     beam_center_y: float,
     pixel_size_x: float,
     pixel_size_y: float,
-    tilt: float = 0.0,
-    tilt_plane_rotation: float = 0.0,
+    rot1: float = 0.0,
+    rot2: float = 0.0,
+    rot3: float = 0.0,
 ) -> "AzimuthalIntegrator":
     """
     Instantiate and return a pyFAI AzimuthalIntegrator from physical parameters.
@@ -138,8 +139,7 @@ def build_integrator(
     wavelength_m         : X-ray wavelength in **metres**
     beam_center_x/y      : beam centre in **pixels** (x = col, y = row)
     pixel_size_x/y       : pixel pitch in **metres**
-    tilt                 : detector tilt angle in degrees
-    tilt_plane_rotation  : rotation of the tilt plane in degrees
+    rot1/rot2/rot3        : detector rotations in **radians** (pyFAI/poni convention)
     """
     if not HAS_PYFAI:
         raise RuntimeError("pyFAI is not installed.")
@@ -148,9 +148,9 @@ def build_integrator(
         dist=detector_distance_m,
         poni1=beam_center_y * pixel_size_y,   # metres from top edge
         poni2=beam_center_x * pixel_size_x,   # metres from left edge
-        rot1=np.deg2rad(tilt),
-        rot2=np.deg2rad(tilt_plane_rotation),
-        rot3=0.0,
+        rot1=rot1,
+        rot2=rot2,
+        rot3=rot3,
         wavelength=wavelength_m,
     )
     ai.detector.pixel1 = pixel_size_y

@@ -134,6 +134,20 @@ def _geometry_section():
             _label("Pixel size Y (μm)"),
             dcc.Input(id="scat-px-y", type="number", value=172, min=1, style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
+
+        # Detector rotations (pyFAI/poni convention, entered/displayed in degrees)
+        html.Div([
+            _label("↔ Rot1 (°)"),
+            dcc.Input(id="scat-rot1", type="number", value=0, step="any", style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("↕ Rot2 (°)"),
+            dcc.Input(id="scat-rot2", type="number", value=0, step="any", style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("↻ Rot3 (°)"),
+            dcc.Input(id="scat-rot3", type="number", value=0, step="any", style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
     )
 
 

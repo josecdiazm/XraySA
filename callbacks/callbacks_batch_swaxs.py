@@ -6,6 +6,7 @@ Dash callbacks for the Batch SWAXS tab.
 from __future__ import annotations
 import os
 import time
+import numpy as np
 
 from dash import Input, Output, State, callback, no_update
 from dash.exceptions import PreventUpdate
@@ -96,6 +97,9 @@ _PROGRESS_OUTPUTS = [
         State("scat-bcy", "value"),
         State("scat-px-x", "value"),
         State("scat-px-y", "value"),
+        State("scat-rot1", "value"),
+        State("scat-rot2", "value"),
+        State("scat-rot3", "value"),
         # Integration options
         State("scat-npts", "value"),
         State("scat-unit-dropdown", "value"),
@@ -129,6 +133,7 @@ def run_batch(
     energy_keV,
     bcx, bcy,
     px_x_um, px_y_um,
+    rot1_deg, rot2_deg, rot3_deg,
     n_pts,
     unit,
     mask_low, mask_high,
@@ -155,6 +160,9 @@ def run_batch(
         beam_center_y=float(bcy),
         pixel_size_x=float(px_x_um) * 1e-6,
         pixel_size_y=float(px_y_um) * 1e-6,
+        rot1=np.deg2rad(float(rot1_deg or 0)),
+        rot2=np.deg2rad(float(rot2_deg or 0)),
+        rot3=np.deg2rad(float(rot3_deg or 0)),
     )
 
     az_range = None

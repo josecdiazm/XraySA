@@ -164,6 +164,9 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
     State("scat-bcy", "value"),
     State("scat-px-x", "value"),
     State("scat-px-y", "value"),
+    State("scat-rot1", "value"),
+    State("scat-rot2", "value"),
+    State("scat-rot3", "value"),
     # Integration options
     State("scat-npts", "value"),
     State("scat-unit-dropdown", "value"),
@@ -191,6 +194,7 @@ def run_integration(
     energy_keV,
     bcx, bcy,
     px_x_um, px_y_um,
+    rot1_deg, rot2_deg, rot3_deg,
     n_pts,
     unit,
     mask_low, mask_high,
@@ -230,6 +234,9 @@ def run_integration(
             beam_center_y=float(bcy),
             pixel_size_x=float(px_x_um) * 1e-6,
             pixel_size_y=float(px_y_um) * 1e-6,
+            rot1=np.deg2rad(float(rot1_deg or 0)),
+            rot2=np.deg2rad(float(rot2_deg or 0)),
+            rot3=np.deg2rad(float(rot3_deg or 0)),
         )
     except Exception as exc:
         empty = _error_figure(f"Integrator error: {exc}")
@@ -498,6 +505,9 @@ def apply_q_range(n_clicks, q_min, q_max):
     State("scat-bcy", "value"),
     State("scat-px-x", "value"),
     State("scat-px-y", "value"),
+    State("scat-rot1", "value"),
+    State("scat-rot2", "value"),
+    State("scat-rot3", "value"),
     State("scat-npts", "value"),
     State("scat-unit-dropdown", "value"),
     State("scat-mask-low", "value"),
@@ -512,6 +522,7 @@ def run_cake(
     image_data,
     distance_mm, wl_or_e, wavelength_A, energy_keV,
     bcx, bcy, px_x_um, px_y_um,
+    rot1_deg, rot2_deg, rot3_deg,
     n_pts, unit,
     mask_low, mask_high,
     colorscale, log_scale,
@@ -539,6 +550,9 @@ def run_cake(
             beam_center_y=float(bcy),
             pixel_size_x=float(px_x_um) * 1e-6,
             pixel_size_y=float(px_y_um) * 1e-6,
+            rot1=np.deg2rad(float(rot1_deg or 0)),
+            rot2=np.deg2rad(float(rot2_deg or 0)),
+            rot3=np.deg2rad(float(rot3_deg or 0)),
         )
     except Exception as exc:
         return _error_figure(f"Integrator error: {exc}")
@@ -879,6 +893,9 @@ def _error_figure(message: str) -> go.Figure:
     Output("scat-bcy",        "value"),
     Output("scat-px-x",       "value"),
     Output("scat-px-y",       "value"),
+    Output("scat-rot1",       "value"),
+    Output("scat-rot2",       "value"),
+    Output("scat-rot3",       "value"),
     Output("scat-poni-status","children"),
     Input("scat-poni-upload", "contents"),
     State("scat-poni-upload", "filename"),
@@ -893,7 +910,7 @@ def parse_poni(contents, filename):
         content_type, content_string = contents.split(",")
         decoded = base64.b64decode(content_string).decode("utf-8")
     except Exception as exc:
-        return (no_update,) * 7 + (f"✘ Could not decode file: {exc}",)
+        return (no_update,) * 10 + (f"✘ Could not decode file: {exc}",)
 
 
     # ── Load with pyFAI ───────────────────────────────────────────────────────
@@ -911,7 +928,7 @@ def parse_poni(contents, filename):
         ai = pyFAI.load(tmp_path)
 
     except Exception as exc:
-        return (no_update,) * 7 + (f"✘ pyFAI could not parse poni: {exc}",)
+        return (no_update,) * 10 + (f"✘ pyFAI could not parse poni: {exc}",)
     finally:
         # Clean up the temp file whether or not loading succeeded
         if os.path.exists(tmp_path):
@@ -939,6 +956,11 @@ def parse_poni(contents, filename):
         px_x_um = round(ai.detector.pixel2 * 1e6, 4)   # pixel2 → X
         px_y_um = round(ai.detector.pixel1 * 1e6, 4)   # pixel1 → Y
 
+        # Detector rotations: pyFAI stores rot1/rot2/rot3 in radians — display in degrees
+        rot1_deg = round(np.degrees(ai.rot1), 4)
+        rot2_deg = round(np.degrees(ai.rot2), 4)
+        rot3_deg = round(np.degrees(ai.rot3), 4)
+
         status = (
             f"✔ Loaded '{filename}' — "
             f"{ai.detector.__class__.__name__}, "
@@ -947,7 +969,7 @@ def parse_poni(contents, filename):
         )
 
     except Exception as exc:
-        return (no_update,) * 7 + (f"✘ Error reading geometry: {exc}",)
+        return (no_update,) * 10 + (f"✘ Error reading geometry: {exc}",)
 
     return (
         distance_mm,
@@ -957,5 +979,8 @@ def parse_poni(contents, filename):
         bcy,
         px_x_um,
         px_y_um,
+        rot1_deg,
+        rot2_deg,
+        rot3_deg,
         status,
     )
