@@ -134,16 +134,6 @@ def _geometry_section():
             _label("Pixel size Y (μm)"),
             dcc.Input(id="scat-px-y", type="number", value=172, min=1, style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
-
-        # Detector tilt
-        html.Div([
-            _label("Tilt (°)"),
-            dcc.Input(id="scat-tilt", type="number", value=0, step="any", style=_INPUT_STYLE),
-        ], style=_ROW_STYLE),
-        html.Div([
-            _label("Tilt plane rot. (°)"),
-            dcc.Input(id="scat-tilt-rot", type="number", value=0, step="any", style=_INPUT_STYLE),
-        ], style=_ROW_STYLE),
     )
 
 

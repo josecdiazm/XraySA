@@ -96,8 +96,6 @@ _PROGRESS_OUTPUTS = [
         State("scat-bcy", "value"),
         State("scat-px-x", "value"),
         State("scat-px-y", "value"),
-        State("scat-tilt", "value"),
-        State("scat-tilt-rot", "value"),
         # Integration options
         State("scat-npts", "value"),
         State("scat-unit-dropdown", "value"),
@@ -131,7 +129,6 @@ def run_batch(
     energy_keV,
     bcx, bcy,
     px_x_um, px_y_um,
-    tilt, tilt_rot,
     n_pts,
     unit,
     mask_low, mask_high,
@@ -158,8 +155,6 @@ def run_batch(
         beam_center_y=float(bcy),
         pixel_size_x=float(px_x_um) * 1e-6,
         pixel_size_y=float(px_y_um) * 1e-6,
-        tilt=float(tilt or 0),
-        tilt_plane_rotation=float(tilt_rot or 0),
     )
 
     az_range = None

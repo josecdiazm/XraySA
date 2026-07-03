@@ -164,8 +164,6 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
     State("scat-bcy", "value"),
     State("scat-px-x", "value"),
     State("scat-px-y", "value"),
-    State("scat-tilt", "value"),
-    State("scat-tilt-rot", "value"),
     # Integration options
     State("scat-npts", "value"),
     State("scat-unit-dropdown", "value"),
@@ -193,7 +191,6 @@ def run_integration(
     energy_keV,
     bcx, bcy,
     px_x_um, px_y_um,
-    tilt, tilt_rot,
     n_pts,
     unit,
     mask_low, mask_high,
@@ -233,8 +230,6 @@ def run_integration(
             beam_center_y=float(bcy),
             pixel_size_x=float(px_x_um) * 1e-6,
             pixel_size_y=float(px_y_um) * 1e-6,
-            tilt=float(tilt or 0),
-            tilt_plane_rotation=float(tilt_rot or 0),
         )
     except Exception as exc:
         empty = _error_figure(f"Integrator error: {exc}")
@@ -503,8 +498,6 @@ def apply_q_range(n_clicks, q_min, q_max):
     State("scat-bcy", "value"),
     State("scat-px-x", "value"),
     State("scat-px-y", "value"),
-    State("scat-tilt", "value"),
-    State("scat-tilt-rot", "value"),
     State("scat-npts", "value"),
     State("scat-unit-dropdown", "value"),
     State("scat-mask-low", "value"),
@@ -519,7 +512,6 @@ def run_cake(
     image_data,
     distance_mm, wl_or_e, wavelength_A, energy_keV,
     bcx, bcy, px_x_um, px_y_um,
-    tilt, tilt_rot,
     n_pts, unit,
     mask_low, mask_high,
     colorscale, log_scale,
@@ -547,8 +539,6 @@ def run_cake(
             beam_center_y=float(bcy),
             pixel_size_x=float(px_x_um) * 1e-6,
             pixel_size_y=float(px_y_um) * 1e-6,
-            tilt=float(tilt or 0),
-            tilt_plane_rotation=float(tilt_rot or 0),
         )
     except Exception as exc:
         return _error_figure(f"Integrator error: {exc}")
@@ -889,8 +879,6 @@ def _error_figure(message: str) -> go.Figure:
     Output("scat-bcy",        "value"),
     Output("scat-px-x",       "value"),
     Output("scat-px-y",       "value"),
-    Output("scat-tilt",       "value"),
-    Output("scat-tilt-rot",   "value"),
     Output("scat-poni-status","children"),
     Input("scat-poni-upload", "contents"),
     State("scat-poni-upload", "filename"),
@@ -905,9 +893,9 @@ def parse_poni(contents, filename):
         content_type, content_string = contents.split(",")
         decoded = base64.b64decode(content_string).decode("utf-8")
     except Exception as exc:
-        return (no_update,) * 9 + (f"✘ Could not decode file: {exc}",)
+        return (no_update,) * 7 + (f"✘ Could not decode file: {exc}",)
 
-    
+
     # ── Load with pyFAI ───────────────────────────────────────────────────────
     try:
         # pyFAI.load() requires a file path, not a StringIO object
@@ -923,12 +911,12 @@ def parse_poni(contents, filename):
         ai = pyFAI.load(tmp_path)
 
     except Exception as exc:
-        return (no_update,) * 9 + (f"✘ pyFAI could not parse poni: {exc}",)
+        return (no_update,) * 7 + (f"✘ pyFAI could not parse poni: {exc}",)
     finally:
         # Clean up the temp file whether or not loading succeeded
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-    
+
 
     # ── Extract geometry ──────────────────────────────────────────────────────
     try:
@@ -946,8 +934,6 @@ def parse_poni(contents, filename):
         fit2d = ai.getFit2D()
         bcx   = round(fit2d["centerX"], 2)
         bcy   = round(fit2d["centerY"], 2)
-        # tilt      = round(fit2d["tilt"], 4)
-        # tilt_rot  = round(fit2d["tiltPlanRotation"], 4)
 
         # Pixel sizes μm
         px_x_um = round(ai.detector.pixel2 * 1e6, 4)   # pixel2 → X
@@ -961,7 +947,7 @@ def parse_poni(contents, filename):
         )
 
     except Exception as exc:
-        return (no_update,) * 9 + (f"✘ Error reading geometry: {exc}",)
+        return (no_update,) * 7 + (f"✘ Error reading geometry: {exc}",)
 
     return (
         distance_mm,
@@ -971,7 +957,5 @@ def parse_poni(contents, filename):
         bcy,
         px_x_um,
         px_y_um,
-        0, #tilt,
-        0, #tilt_rot,
         status,
     )
