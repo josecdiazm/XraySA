@@ -65,7 +65,7 @@ def make_sample_row(i, name="", formula="", density=1.0, thickness=1):
                           style={"fontSize": "12px", "marginRight": "3px"}),
                 dcc.Input(id={"type": "xas-thickness", "index": i},
                           type="number", value=thickness,
-                          min=0, max=9000000, step=1,
+                          min=0, max=9000000, step="any",
                           style={"width": "90px", **inp_style}),
             ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"})
         ),
