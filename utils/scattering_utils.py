@@ -92,8 +92,11 @@ def decode_upload(contents: str, filename: str) -> np.ndarray:
         return npz[key]
 
     if HAS_FABIO:
-        buf = io.BytesIO(raw)
-        buf.name = filename          # fabio uses the name to pick the reader
+        # fabio's _open() passes any read/write-capable stream straight
+        # through unmodified — it never adds the .lock (threading.Semaphore)
+        # some formats' lazy pixel-read path assumes exists. Plain
+        # io.BytesIO doesn't have one; fabio's own BytesIO wrapper does.
+        buf = fabio.fabioutils.BytesIO(raw, fname=filename)
         img = fabio.open(buf)
         return img.data.astype(float)
 
