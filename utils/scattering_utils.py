@@ -12,17 +12,25 @@ import numpy as np
 _SUPERSCRIPT_MAP = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
 
 
-def power_of_ten_ticks(display: np.ndarray):
+def power_of_ten_ticks(display: np.ndarray, vmin: float | None = None, vmax: float | None = None):
     """
     Build (tickvals, ticktext) for a colorbar whose underlying data has
     already been log10-transformed, so it reads as "10ⁿ" (matching the
     1-D plot's power-of-10 axis notation) instead of the raw exponent.
+
+    vmin/vmax (already in log10 space) override the data-derived range,
+    so the ticks follow a user-set Cbar min/max instead of the array's
+    own extent.
     """
-    finite = display[np.isfinite(display)]
-    if finite.size == 0:
-        return None, None
-    lo = int(np.floor(finite.min()))
-    hi = int(np.ceil(finite.max()))
+    if vmin is not None and vmax is not None:
+        lo = int(np.floor(vmin))
+        hi = int(np.ceil(vmax))
+    else:
+        finite = display[np.isfinite(display)]
+        if finite.size == 0:
+            return None, None
+        lo = int(np.floor(finite.min()))
+        hi = int(np.ceil(finite.max()))
     if hi <= lo:
         hi = lo + 1
     exps = list(range(lo, hi + 1))

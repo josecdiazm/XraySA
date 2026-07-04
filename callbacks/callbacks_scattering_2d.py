@@ -41,6 +41,23 @@ _UNIT_LABELS = {
 }
 
 
+def _cbar_zrange(cbar_min, cbar_max, is_log):
+    """
+    Convert user-facing Cbar min/max (always entered in raw intensity
+    units, like matplotlib's imshow vmin/vmax) into the zmin/zmax the
+    heatmap trace needs. When the log toggle is on, the displayed array
+    is already log10-transformed, so the bounds must be too.
+    """
+    def _conv(v):
+        if v is None:
+            return None
+        v = float(v)
+        if is_log:
+            return np.log10(v) if v > 0 else None
+        return v
+    return _conv(cbar_min), _conv(cbar_max)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Store raw image data when a file is uploaded
 # ─────────────────────────────────────────────────────────────────────────────
@@ -75,14 +92,16 @@ def store_uploaded_image(contents, filename):
     Input("scat-log-toggle", "value"),
     Input("scat-mask-low", "value"),
     Input("scat-mask-high", "value"),
+    Input("scat-cbar-min", "value"),
+    Input("scat-cbar-max", "value"),
     Input("scat-pixel-mask-store", "data"),
     Input("scat-show-beam-centre", "value"),
     Input("scat-bcx", "value"),
     Input("scat-bcy", "value"),
     prevent_initial_call=True,
 )
-def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixel_mask_regions,
-                     show_beam_centre, bcx, bcy):
+def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, cbar_min, cbar_max,
+                     pixel_mask_regions, show_beam_centre, bcx, bcy):
     if image_data is None:
         raise PreventUpdate
 
@@ -99,19 +118,23 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
         with np.errstate(divide="ignore", invalid="ignore"):
             display = np.where(display > 0, np.log10(display), np.nan)
 
+    zmin, zmax = _cbar_zrange(cbar_min, cbar_max, is_log)
+
     colorbar = dict(
         title=dict(text="Scattering Intensity (a.u.)", side="right"),
         x=1.02, thickness=20, len=1, lenmode="fraction",
         ticks="outside",
     )
     if is_log:
-        tickvals, ticktext = _power_of_ten_ticks(display)
+        tickvals, ticktext = _power_of_ten_ticks(display, vmin=zmin, vmax=zmax)
         if tickvals is not None:
             colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
     fig = go.Figure(
         go.Heatmap(
             z=display,
+            zmin=zmin,
+            zmax=zmax,
             colorscale=colorscale or "Viridis",
             colorbar=colorbar,
             hovertemplate="col: %{x}<br>row: %{y}<br>value: %{z:.3g}<extra></extra>",
@@ -211,6 +234,8 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
     State("scat-unit-dropdown", "value"),
     State("scat-mask-low", "value"),
     State("scat-mask-high", "value"),
+    State("scat-cbar-min", "value"),
+    State("scat-cbar-max", "value"),
     State("scat-azimuth-min", "value"),
     State("scat-azimuth-max", "value"),
     State("scat-error-model", "value"),
@@ -238,6 +263,7 @@ def run_integration(
     n_pts,
     unit,
     mask_low, mask_high,
+    cbar_min, cbar_max,
     az_min, az_max,
     error_model,
     colorscale,
@@ -364,13 +390,15 @@ def run_integration(
         with np.errstate(divide="ignore", invalid="ignore"):
             display_qxy = np.where(display_qxy > 0, np.log10(display_qxy), np.nan)
 
+    qxy_zmin, qxy_zmax = _cbar_zrange(cbar_min, cbar_max, is_log)
+
     qxy_colorbar = dict(
         title=dict(text="Scattering Intensity (a.u.)", side="right"),
         x=1.02, thickness=20, len=1, lenmode="fraction",
         ticks="outside",
     )
     if is_log:
-        tickvals, ticktext = _power_of_ten_ticks(display_qxy)
+        tickvals, ticktext = _power_of_ten_ticks(display_qxy, vmin=qxy_zmin, vmax=qxy_zmax)
         if tickvals is not None:
             qxy_colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
@@ -379,6 +407,8 @@ def run_integration(
             x=qx,
             y=qy,
             z=display_qxy,
+            zmin=qxy_zmin,
+            zmax=qxy_zmax,
             colorscale=colorscale or "Viridis",
             colorbar=qxy_colorbar,
             hovertemplate="qx: %{x:.4g} Å⁻¹<br>qy: %{y:.4g} Å⁻¹<br>I: %{z:.3g}<extra></extra>",
@@ -597,6 +627,8 @@ def apply_q_range(n_clicks, q_min, q_max):
     State("scat-unit-dropdown", "value"),
     State("scat-mask-low", "value"),
     State("scat-mask-high", "value"),
+    State("scat-cbar-min", "value"),
+    State("scat-cbar-max", "value"),
     State("scat-colorscale-dropdown", "value"),
     State("scat-log-toggle", "value"),
     State("scat-pixel-mask-store", "data"),
@@ -610,6 +642,7 @@ def run_cake(
     rot1_deg, rot2_deg, rot3_deg,
     n_pts, unit,
     mask_low, mask_high,
+    cbar_min, cbar_max,
     colorscale, log_scale,
     pixel_mask_regions,
 ):
@@ -662,13 +695,15 @@ def run_cake(
         with np.errstate(divide="ignore", invalid="ignore"):
             display = np.where(display > 0, np.log10(display), np.nan)
 
+    cake_zmin, cake_zmax = _cbar_zrange(cbar_min, cbar_max, is_log)
+
     cake_colorbar = dict(
         title=dict(text="Scattering Intensity (a.u.)", side="right"),
         x=1.02, thickness=20, len=1, lenmode="fraction",
         ticks="outside",
     )
     if is_log:
-        tickvals, ticktext = _power_of_ten_ticks(display)
+        tickvals, ticktext = _power_of_ten_ticks(display, vmin=cake_zmin, vmax=cake_zmax)
         if tickvals is not None:
             cake_colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
@@ -677,6 +712,8 @@ def run_cake(
             x=q_ax,
             y=chi_ax,
             z=display,
+            zmin=cake_zmin,
+            zmax=cake_zmax,
             colorscale=colorscale or "Viridis",
             colorbar=cake_colorbar,
             hovertemplate=f"{_UNIT_LABELS.get(unit, unit)}: %{{x:.4g}}<br>χ: %{{y:.1f}}°<br>I: %{{z:.3g}}<extra></extra>",
