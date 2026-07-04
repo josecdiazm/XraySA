@@ -13,7 +13,12 @@
     var LEN_FRACTION = 0.95;
 
     function fixColorbar() {
-        var gd = document.getElementById(TARGET_ID);
+        // dcc.Graph puts the id we gave it on an *outer wrapper* div; Plotly.js
+        // actually draws into an unlabeled inner div (tagged "js-plotly-plot")
+        // nested inside it. _fullLayout/_fullData only ever exist on that inner
+        // one, so we have to descend into it explicitly.
+        var wrapper = document.getElementById(TARGET_ID);
+        var gd = wrapper ? wrapper.querySelector(".js-plotly-plot") : null;
         if (!gd || !gd._fullLayout || !gd._fullData || !gd._fullData.length) return;
 
         var xaxis = gd._fullLayout.xaxis;
