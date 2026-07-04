@@ -15,6 +15,7 @@ from utils.scattering_utils import (
     integrate_1d,
     integrate_2d_qxy,
     apply_threshold_mask,
+    power_of_ten_ticks,
 )
 
 if HAS_FABIO:
@@ -115,22 +116,47 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
     if log_scale:
         with np.errstate(divide="ignore", invalid="ignore"):
             display = np.where(display > 0, np.log10(display), np.nan)
-        cb_title = "log₁₀(I)"
-    else:
-        cb_title = "Intensity"
+
+    colorbar = dict(
+        title=dict(text="Scattering Intensity (a.u.)", side="right"),
+        x=1.02, thickness=20, len=1, lenmode="fraction",
+        ticks="outside",
+    )
+    if log_scale:
+        tickvals, ticktext = power_of_ten_ticks(display)
+        if tickvals is not None:
+            colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
     fig = go.Figure(
         go.Heatmap(
             x=qx, y=qy, z=display,
             colorscale=colorscale or "Viridis",
-            colorbar=dict(title=cb_title),
+            colorbar=colorbar,
         )
     )
     fig.update_layout(
         xaxis_title="qx (Å⁻¹)",
         yaxis_title="qy (Å⁻¹)",
         margin=dict(l=10, r=10, t=30, b=10),
-        yaxis=dict(scaleanchor="x", scaleratio=1),
+        xaxis=dict(
+            range=[float(qx.min()), float(qx.max())],
+            autorange=False,
+            constrain="domain",
+            showgrid=False,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            scaleanchor="x",
+            scaleratio=1,
+            range=[float(qy.min()), float(qy.max())],
+            autorange=False,
+            constrain="domain",
+            showgrid=False,
+            zeroline=False,
+        ),
+        plot_bgcolor="black",
+        paper_bgcolor="white",
+        font=dict(family="Arial", size=14, color="black"),
         width=800,
         height=700,
     )

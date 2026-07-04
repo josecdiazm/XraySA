@@ -27,6 +27,7 @@ from utils.scattering_utils import (
     integrate_2d_qxy,
     q_to_twotheta,
     energy_to_wavelength,
+    power_of_ten_ticks as _power_of_ten_ticks,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -93,18 +94,26 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
     display = arr.copy()
     display[mask] = np.nan
 
-    if log_scale and "log" in (log_scale or []):
+    is_log = bool(log_scale and "log" in (log_scale or []))
+    if is_log:
         with np.errstate(divide="ignore", invalid="ignore"):
             display = np.where(display > 0, np.log10(display), np.nan)
+
+    colorbar = dict(
+        title=dict(text="Scattering Intensity (a.u.)", side="right"),
+        x=1.02, thickness=20, len=1, lenmode="fraction",
+        ticks="outside",
+    )
+    if is_log:
+        tickvals, ticktext = _power_of_ten_ticks(display)
+        if tickvals is not None:
+            colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
     fig = go.Figure(
         go.Heatmap(
             z=display,
             colorscale=colorscale or "Viridis",
-            colorbar=dict(
-                title=dict(text="Scattering Intensity (a.u.)", side="right"),
-                x=1.01, thickness=20, len=0.92, lenmode="fraction",
-            ),
+            colorbar=colorbar,
             hovertemplate="col: %{x}<br>row: %{y}<br>value: %{z:.3g}<extra></extra>",
         )
     )
@@ -133,7 +142,7 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
         uirevision="scat-2d",
         plot_bgcolor="black",
         paper_bgcolor="white",
-        font=dict(family="Arial", size=12),
+        font=dict(family="Arial", size=14, color="black"),
     )
 
     # Outline each defined hot-pixel region so its placement is visible
@@ -346,9 +355,20 @@ def run_integration(
         qxy_mask = apply_threshold_mask(I_qxy, low=mask_low, high=mask_high)
         display_qxy[qxy_mask] = np.nan
 
-    if log_scale and "log" in (log_scale or []):
+    is_log = bool(log_scale and "log" in (log_scale or []))
+    if is_log:
         with np.errstate(divide="ignore", invalid="ignore"):
             display_qxy = np.where(display_qxy > 0, np.log10(display_qxy), np.nan)
+
+    qxy_colorbar = dict(
+        title=dict(text="Scattering Intensity (a.u.)", side="right"),
+        x=1.02, thickness=20, len=1, lenmode="fraction",
+        ticks="outside",
+    )
+    if is_log:
+        tickvals, ticktext = _power_of_ten_ticks(display_qxy)
+        if tickvals is not None:
+            qxy_colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
     fig_qxy = go.Figure(
         go.Heatmap(
@@ -356,10 +376,7 @@ def run_integration(
             y=qy,
             z=display_qxy,
             colorscale=colorscale or "Viridis",
-            colorbar=dict(
-                title=dict(text="Scattering Intensity (a.u.)", side="right"),
-                x=1.01, thickness=20, len=0.92, lenmode="fraction",
-            ),
+            colorbar=qxy_colorbar,
             hovertemplate="qx: %{x:.4g} Å⁻¹<br>qy: %{y:.4g} Å⁻¹<br>I: %{z:.3g}<extra></extra>",
         )
     )
@@ -371,7 +388,7 @@ def run_integration(
         uirevision="scat-2d-q",
         plot_bgcolor="black",
         paper_bgcolor="white",
-        font=dict(family="Arial", size=12),
+        font=dict(family="Arial", size=14, color="black"),
         xaxis=dict(
             range=[float(qx.min()), float(qx.max())],
             autorange=False,   # lock to the heatmap's own data extent — the
@@ -516,7 +533,7 @@ def update_1d_plot(q_data, q_range, log_y, log_x, unit):
         hovermode="x unified",
         plot_bgcolor="white",
         paper_bgcolor="white",
-        font=dict(family="Arial", size=12),
+        font=dict(family="Arial", size=14, color="black"),
         xaxis=dict(
             showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True,
             ticks="outside", exponentformat="power", showexponent="all",
@@ -632,12 +649,20 @@ def run_cake(
         return _error_figure(f"Cake error: {exc}")
 
     display = I2d.copy()
-    if log_scale and "log" in (log_scale or []):
+    is_log = bool(log_scale and "log" in (log_scale or []))
+    if is_log:
         with np.errstate(divide="ignore", invalid="ignore"):
             display = np.where(display > 0, np.log10(display), np.nan)
-        cb_title = "log₁₀(I)"
-    else:
-        cb_title = "Intensity"
+
+    cake_colorbar = dict(
+        title=dict(text="Scattering Intensity (a.u.)", side="right"),
+        x=1.02, thickness=20, len=1, lenmode="fraction",
+        ticks="outside",
+    )
+    if is_log:
+        tickvals, ticktext = _power_of_ten_ticks(display)
+        if tickvals is not None:
+            cake_colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
     fig = go.Figure(
         go.Heatmap(
@@ -645,7 +670,7 @@ def run_cake(
             y=chi_ax,
             z=display,
             colorscale=colorscale or "Viridis",
-            colorbar=dict(title=cb_title),
+            colorbar=cake_colorbar,
             hovertemplate=f"{_UNIT_LABELS.get(unit, unit)}: %{{x:.4g}}<br>χ: %{{y:.1f}}°<br>I: %{{z:.3g}}<extra></extra>",
         )
     )
@@ -656,7 +681,7 @@ def run_cake(
         uirevision="scat-cake",
         plot_bgcolor="black",
         paper_bgcolor="white",
-        font=dict(family="Arial", size=12),
+        font=dict(family="Arial", size=14, color="black"),
         xaxis=dict(showgrid=False, zeroline=False, linecolor="black", mirror=True),
         yaxis=dict(showgrid=False, zeroline=False, linecolor="black", mirror=True),
     )

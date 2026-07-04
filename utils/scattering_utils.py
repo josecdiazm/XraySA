@@ -9,6 +9,26 @@ import io
 import base64
 import numpy as np
 
+_SUPERSCRIPT_MAP = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+
+def power_of_ten_ticks(display: np.ndarray):
+    """
+    Build (tickvals, ticktext) for a colorbar whose underlying data has
+    already been log10-transformed, so it reads as "10ⁿ" (matching the
+    1-D plot's power-of-10 axis notation) instead of the raw exponent.
+    """
+    finite = display[np.isfinite(display)]
+    if finite.size == 0:
+        return None, None
+    lo = int(np.floor(finite.min()))
+    hi = int(np.ceil(finite.max()))
+    if hi <= lo:
+        hi = lo + 1
+    exps = list(range(lo, hi + 1))
+    ticktext = [f"10{str(e).translate(_SUPERSCRIPT_MAP)}" for e in exps]
+    return exps, ticktext
+
 # ── Optional heavy imports ────────────────────────────────────────────────────
 try:
     import fabio
