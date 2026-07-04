@@ -33,7 +33,7 @@ from callbacks._shared import wedge_overlay_trace, error_figure
 # ── Constants ─────────────────────────────────────────────────────────────────
 _VERT_COLORS    = ["#1f77b4", "#17becf", "#2ca02c", "#8c564b", "#9467bd"]
 _HORIZ_COLORS   = ["#ff7f0e", "#d62728", "#e377c2", "#bcbd22", "#7f7f7f"]
-_AZIMUTH_COLORS = ["beige", "orchid", "gold", "turquoise", "salmon"]
+_AZIMUTH_COLORS = ["magenta", "gold", "cyan", "orchid", "chartreuse"]
 
 _PALETTES = {"vert": _VERT_COLORS, "horiz": _HORIZ_COLORS, "azimuth": _AZIMUTH_COLORS}
 
