@@ -158,7 +158,7 @@ def _integration_section():
         # Number of points
         html.Div([
             _label("Points"),
-            dcc.Input(id="scat-npts", type="number", value=1000, min=10, max=10000,
+            dcc.Input(id="scat-npts", type="number", value=2000, min=10, max=10000,
                       style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
 
