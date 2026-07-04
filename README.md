@@ -1,13 +1,19 @@
 # XraySA
 
-X-ray Spectroscopy & Scattering Tools — a Dash web app with tabs for:
+X-ray Spectroscopy & Scattering Tools — a Dash web app for reducing and analyzing X-ray absorption (XAS) and scattering (SAXS/WAXS) data from synchrotron beamlines.
+
+## Tabs
 
 - **PTable** — periodic table element lookup
-- **XAS Calculations** — X-ray absorption spectroscopy
-- **Scattering 2D & 1D** — 2D/1D scattering data processing
-- **Grazing Incidence (GI-SWAXS)** — grazing-incidence scattering
-- **Resonant Scattering**
-- **SAXS/WAXS Merging**
+- **XAS Calculations** — transmission/absorption calculations across a sample stack and energy range
+- **Scattering 2D & 1D** — the core scattering tool: upload a detector image (and optionally a `.poni` calibration file), set up pyFAI geometry, and run azimuthal integration
+  - Live 2-D views in both pixel space and remapped qx/qy space, plus 1-D I(q) and cake (q vs. χ) plots
+  - Hot-pixel masking (square/circular regions by center + size), independent of intensity thresholding
+  - Azimuthal wedge overlay and beam-centre marker on the q-space image
+  - Q-range filtering, multiple output units, and CSV export
+- **Batch SWAXS** — run 1-D and/or 2-D q-space processing over a whole folder of detector images in the background (with a live progress bar), reusing the geometry/integration settings from the Scattering 2D & 1D tab
+- **SWAXS Merging** — average multiple integrated profiles and merge/splice two averaged profiles together
+- **Resonant Scattering** / **Grazing Incidence (GI-SWAXS)** — placeholder tabs, not yet implemented
 
 ## Setup
 
@@ -28,3 +34,10 @@ python app.py
 ```
 
 The app runs at [http://127.0.0.1:8050](http://127.0.0.1:8050).
+
+## Notes
+
+- Built on [pyFAI](https://pyfai.readthedocs.io/) for detector calibration/azimuthal integration and [fabio](https://fabio.readthedocs.io/) for reading detector image formats (edf, cbf, tif, etc.), in addition to `.npy`/`.npz`.
+- Batch SWAXS uses Dash's background callbacks (`dash[diskcache]`) for progress bars on long-running batch jobs.
+- The native folder-picker dialog (used in Batch SWAXS and SWAXS Merging) relies on `osascript` and only works on macOS; other platforms need the folder path typed in manually.
+- This is a local-only tool (server and browser on the same machine) — it is not hardened for exposure on a network.
