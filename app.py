@@ -20,6 +20,7 @@ import callbacks.callbacks_ptable
 import callbacks.callbacks_transmission
 import callbacks.callbacks_batch_swaxs
 import callbacks.callbacks_merging
+import callbacks.callbacks_gisaxs
 
 # ── Background callback manager (for batch progress) ──────────────────────────
 _cache = diskcache.Cache("./cache")

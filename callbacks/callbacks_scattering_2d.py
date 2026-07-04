@@ -30,6 +30,7 @@ from utils.scattering_utils import (
     power_of_ten_ticks as _power_of_ten_ticks,
     cbar_zrange as _cbar_zrange,
 )
+from callbacks._shared import wedge_overlay_trace, error_figure as _error_figure
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 _COLORSCALES = ["Viridis", "Inferno", "Plasma", "Hot", "Greys", "Jet"]
@@ -433,35 +434,9 @@ def run_integration(
 
     
     # ── Wedge overlay ─────────────────────────────────────────────────────────
-    if all(v is not None for v in [az_min, az_max, wedge_qmin, wedge_qmax]):
-        ang_min = np.deg2rad(-float(az_max))
-        ang_max = np.deg2rad(-float(az_min))
-        arc_angles = np.linspace(ang_min, ang_max, 120)
-
-        q_min_w = float(wedge_qmin)
-        q_max_w = float(wedge_qmax)
-
-        outer_x = q_max_w * np.cos(arc_angles)
-        outer_y = q_max_w * np.sin(arc_angles)
-        inner_x = q_min_w * np.cos(arc_angles[::-1])
-        inner_y = q_min_w * np.sin(arc_angles[::-1])
-
-        wedge_x = np.concatenate([outer_x, inner_x, [outer_x[0]]])
-        wedge_y = np.concatenate([outer_y, inner_y, [outer_y[0]]])
-
-        fig_qxy.add_trace(go.Scatter(
-            x=wedge_x,
-            y=wedge_y,
-            mode="lines",
-            line=dict(color="beige", width=1.5, dash="2px,2px"),
-            fill="none",
-            name="Wedge",
-            showlegend=False,
-            hovertemplate=(
-                f"az: [{az_min:.1f}°, {az_max:.1f}°]<br>"
-                f"q: [{q_min_w:.3g}, {q_max_w:.3g}] Å⁻¹<extra></extra>"
-            ),
-        ))
+    wedge = wedge_overlay_trace(az_min, az_max, wedge_qmin, wedge_qmax)
+    if wedge is not None:
+        fig_qxy.add_trace(wedge)
 
     # Beam centre marker — in q-space the beam centre is always the origin,
     # since integration is performed relative to it.
@@ -870,23 +845,6 @@ def render_pixel_mask_list(regions):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Helper
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _error_figure(message: str) -> go.Figure:
-    """Return a blank figure with an error annotation."""
-    fig = go.Figure()
-    fig.add_annotation(
-        text=message,
-        xref="paper", yref="paper",
-        x=0.5, y=0.5,
-        showarrow=False,
-        font=dict(size=14, color="red"),
-    )
-    fig.update_layout(margin=dict(l=10, r=10, t=30, b=10))
-    return fig
 
 
 # # ─────────────────────────────────────────────────────────────────────────────

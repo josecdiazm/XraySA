@@ -313,6 +313,109 @@ def integrate_2d_qxy(
     return result.intensity, qx, qy
 
 
+# ── Grazing-incidence (fiber) integration ─────────────────────────────────────
+
+def build_fiber_integrator(ai: "AzimuthalIntegrator"):
+    """
+    Promote a standard AzimuthalIntegrator to a pyFAI FiberIntegrator, which
+    adds the grazing-incidence geometry (incident/tilt angle, sample
+    orientation) needed for GI-SWAXS integration.
+    """
+    if not HAS_PYFAI:
+        raise RuntimeError("pyFAI is not installed.")
+    return ai.promote(type_="pyFAI.integrator.fiber.FiberIntegrator")
+
+
+def integrate_2d_grazing_incidence(
+    data: np.ndarray,
+    fi,
+    *,
+    sample_orientation: int,
+    incident_angle_rad: float,
+    tilt_angle_rad: float = 0.0,
+    n_ip: int = 500,
+    n_oop: int = 500,
+    mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Remap a grazing-incidence detector image onto a regular qxy (in-plane) /
+    qz (out-of-plane) grid using pyFAI's FiberIntegrator.
+
+    Returns
+    -------
+    I2d  : 2-D intensity array, shape (n_oop, n_ip)
+    qxy  : in-plane axis in Å⁻¹
+    qz   : out-of-plane axis in Å⁻¹
+    """
+    kwargs: dict = dict(
+        npt_ip=n_ip,
+        npt_oop=n_oop,
+        unit_ip="qip_A^-1",
+        unit_oop="qoop_A^-1",
+        sample_orientation=sample_orientation,
+        incident_angle=incident_angle_rad,
+        tilt_angle=tilt_angle_rad,
+        correctSolidAngle=True,
+        method="splitpix",
+    )
+    if mask is not None:
+        kwargs["mask"] = mask.astype(np.int8)
+
+    intensity, qxy, qz = fi.integrate2d_grazing_incidence(data, **kwargs)
+    return intensity, qxy, qz
+
+
+def integrate_1d_grazing_incidence(
+    data: np.ndarray,
+    fi,
+    *,
+    sample_orientation: int,
+    incident_angle_rad: float,
+    tilt_angle_rad: float = 0.0,
+    ip_range: tuple[float, float],
+    oop_range: tuple[float, float],
+    vertical_integration: bool,
+    n_points: int = 1000,
+    mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    1-D grazing-incidence line-cut integration, restricted to an in-plane
+    (qxy) window and an out-of-plane (qz) window.
+
+    vertical_integration=True  -> integrated over the ip_range window, x = qz
+    vertical_integration=False -> integrated over the oop_range window, x = qxy
+
+    A "vertical region" (a user-picked qxy band) should be passed as
+    ip_range with vertical_integration=True; a "horizontal region" (a
+    user-picked qz band) should be passed as oop_range with
+    vertical_integration=False. The other range should span the full
+    detector extent so it doesn't additionally clip the profile.
+
+    Returns
+    -------
+    x : qz (vertical_integration=True) or qxy (False) axis, Å⁻¹
+    I : integrated intensity
+    """
+    kwargs: dict = dict(
+        npt_ip=n_points,
+        npt_oop=n_points,
+        unit_ip="qip_A^-1",
+        unit_oop="qoop_A^-1",
+        sample_orientation=sample_orientation,
+        incident_angle=incident_angle_rad,
+        tilt_angle=tilt_angle_rad,
+        ip_range=ip_range,
+        oop_range=oop_range,
+        vertical_integration=vertical_integration,
+        correctSolidAngle=True,
+    )
+    if mask is not None:
+        kwargs["mask"] = mask.astype(np.int8)
+
+    x, I = fi.integrate1d_grazing_incidence(data, **kwargs)
+    return x, I
+
+
 # ── Unit conversion helpers ───────────────────────────────────────────────────
 
 def q_to_twotheta(q: np.ndarray, wavelength_A: float) -> np.ndarray:

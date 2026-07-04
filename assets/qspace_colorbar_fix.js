@@ -1,23 +1,25 @@
-// The q-space detector image (scat-2d-q-graph) uses scaleanchor + constrain="domain"
-// to keep pixels square. When the data's qx/qy aspect ratio doesn't match the plot
-// card's own width:height ratio, Plotly shrinks whichever axis domain is needed to
-// compensate — the x-axis for a "portrait" detector orientation, or the y-axis for
-// a "landscape" one (e.g. after rotating a thin detector 90° with Rot3). Either way,
-// the colorbar's x/y/len stay fixed relative to the whole plot area, not to that
-// shrunk domain, leaving a gap. Since the card's width is responsive, the actual
-// domain isn't knowable ahead of time in Python, so this polls the rendered figure
-// and matches the colorbar's position and length to the image's real domain.
+// Any square-pixel detector-style plot (q-space qx/qy, GI-SWAXS qxy/qz, …)
+// uses scaleanchor + constrain="domain" to keep pixels square. When the
+// data's aspect ratio doesn't match the plot card's own width:height ratio,
+// Plotly shrinks whichever axis domain is needed to compensate — the x-axis
+// for a "portrait" orientation, or the y-axis for a "landscape" one (e.g.
+// after rotating a thin detector 90° with Rot3). Either way, the colorbar's
+// x/y/len stay fixed relative to the whole plot area, not to that shrunk
+// domain, leaving a gap. Since each card's width is responsive, the actual
+// domain isn't knowable ahead of time in Python, so this polls each target
+// graph's rendered figure and matches its colorbar's position/length to the
+// image's real domain.
 (function () {
-    var TARGET_ID = "scat-2d-q-graph";
+    var TARGET_IDS = ["scat-2d-q-graph", "gi-2d-graph"];
     var PAD = 0.02;
     var LEN_FRACTION = 1;
 
-    function fixColorbar() {
+    function fixColorbar(targetId) {
         // dcc.Graph puts the id we gave it on an *outer wrapper* div; Plotly.js
         // actually draws into an unlabeled inner div (tagged "js-plotly-plot")
         // nested inside it. _fullLayout/_fullData only ever exist on that inner
         // one, so we have to descend into it explicitly.
-        var wrapper = document.getElementById(TARGET_ID);
+        var wrapper = document.getElementById(targetId);
         var gd = wrapper ? wrapper.querySelector(".js-plotly-plot") : null;
         if (!gd || !gd._fullLayout || !gd._fullData || !gd._fullData.length) return;
 
@@ -52,5 +54,7 @@
         );
     }
 
-    setInterval(fixColorbar, 500);
+    setInterval(function () {
+        TARGET_IDS.forEach(fixColorbar);
+    }, 500);
 })();
