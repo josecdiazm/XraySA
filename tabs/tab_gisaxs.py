@@ -78,6 +78,39 @@ def _gi_geometry_section():
     )
 
 
+def _gi_display_range_section():
+    return _section(
+        "🖼️ 2-D display range",
+        html.Div(
+            "Sets the qxy/qz plot axis limits (like matplotlib's set_xlim/"
+            "set_ylim) — display only, doesn't affect any integration. "
+            "Leave a field blank to use the full computed extent.",
+            style={"fontSize": "0.78rem", "color": "#6c757d", "marginBottom": "8px"},
+        ),
+
+        html.Div([
+            _label("qxy min (Å⁻¹)"),
+            dcc.Input(id="gi-display-qxy-min", type="number", placeholder="auto", debounce=True,
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("qxy max (Å⁻¹)"),
+            dcc.Input(id="gi-display-qxy-max", type="number", placeholder="auto", debounce=True,
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("qz min (Å⁻¹)"),
+            dcc.Input(id="gi-display-qz-min", type="number", value=0, debounce=True,
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("qz max (Å⁻¹)"),
+            dcc.Input(id="gi-display-qz-max", type="number", placeholder="auto", debounce=True,
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+    )
+
+
 def _gi_azimuthal_section():
     return _section(
         "🔺 Azimuthal integration",
@@ -271,6 +304,7 @@ def layout():
                 dbc.Col(
                     [
                         _gi_geometry_section(),
+                        _gi_display_range_section(),
                         _gi_azimuthal_section(),
                         _gi_vertical_section(),
                         _gi_horizontal_section(),

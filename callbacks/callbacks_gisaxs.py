@@ -347,6 +347,11 @@ def render_horiz_list(regions):
     State("gi-sample-orientation", "value"),
     State("gi-npt-ip", "value"),
     State("gi-npt-oop", "value"),
+    # 2-D display range (view only — doesn't affect any integration)
+    State("gi-display-qxy-min", "value"),
+    State("gi-display-qxy-max", "value"),
+    State("gi-display-qz-min", "value"),
+    State("gi-display-qz-max", "value"),
     # Region accumulators
     State("gi-azimuth-regions-store", "data"),
     State("gi-vert-regions-store", "data"),
@@ -363,6 +368,7 @@ def run_gi_integration(
     mask_low, mask_high, pixel_mask_regions,
     colorscale, log_scale, cbar_min, cbar_max, show_beam_centre,
     incident_angle_deg, tilt_angle_deg, sample_orientation, npt_ip, npt_oop,
+    display_qxy_min, display_qxy_max, display_qz_min, display_qz_max,
     azimuth_regions, vert_regions, horiz_regions,
     n_pts_1d,
 ):
@@ -421,6 +427,17 @@ def run_gi_integration(
     qxy_min_full, qxy_max_full = float(qxy.min()), float(qxy.max())
     qz_min_full, qz_max_full = float(qz.min()), float(qz.max())
 
+    # 2-D display range (view only, like matplotlib's set_xlim/set_ylim) —
+    # a blank field falls back to the full computed extent for that side.
+    xaxis_range = [
+        float(display_qxy_min) if display_qxy_min is not None else qxy_min_full,
+        float(display_qxy_max) if display_qxy_max is not None else qxy_max_full,
+    ]
+    yaxis_range = [
+        float(display_qz_min) if display_qz_min is not None else qz_min_full,
+        float(display_qz_max) if display_qz_max is not None else qz_max_full,
+    ]
+
     # ── 2-D figure ──────────────────────────────────────────────────────────
     display = I2d.copy()
     is_log = bool(log_scale and "log" in (log_scale or []))
@@ -459,7 +476,7 @@ def run_gi_integration(
         paper_bgcolor="white",
         font=dict(family="Arial", size=14, color="black"),
         xaxis=dict(
-            range=[qxy_min_full, qxy_max_full],
+            range=xaxis_range,
             autorange=False,
             constrain="domain",
             showgrid=False,
@@ -470,7 +487,7 @@ def run_gi_integration(
         yaxis=dict(
             scaleanchor="x",
             scaleratio=1,
-            range=[qz_min_full, qz_max_full],
+            range=yaxis_range,
             autorange=False,
             constrain="domain",
             showgrid=False,
@@ -639,7 +656,51 @@ def run_gi_integration(
             except Exception as exc:
                 notes.append(f"Horizontal region {i}{label_suffix} error: {exc}")
 
-    return fig2d, {"curves": curves, "notes": notes}
+    return fig2d, {
+        "curves": curves, "notes": notes,
+        "qxy_min_full": qxy_min_full, "qxy_max_full": qxy_max_full,
+        "qz_min_full": qz_min_full, "qz_max_full": qz_max_full,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3.5.  Live 2-D display-range adjustment (like set_xlim/set_ylim) — just
+#        updates the already-rendered figure's axis range, no re-integration.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("gi-2d-graph", "figure", allow_duplicate=True),
+    Input("gi-display-qxy-min", "value"),
+    Input("gi-display-qxy-max", "value"),
+    Input("gi-display-qz-min", "value"),
+    Input("gi-display-qz-max", "value"),
+    State("gi-integration-store", "data"),
+    State("gi-2d-graph", "figure"),
+    prevent_initial_call=True,
+)
+def update_gi_2d_display_range(qxy_min, qxy_max, qz_min, qz_max, store_data, current_fig):
+    if not current_fig or not store_data:
+        raise PreventUpdate
+
+    qxy_min_full = store_data.get("qxy_min_full")
+    qxy_max_full = store_data.get("qxy_max_full")
+    qz_min_full = store_data.get("qz_min_full")
+    qz_max_full = store_data.get("qz_max_full")
+    if qxy_min_full is None or qz_min_full is None:
+        raise PreventUpdate
+
+    fig = go.Figure(current_fig)
+    fig.update_layout(
+        xaxis=dict(range=[
+            float(qxy_min) if qxy_min is not None else qxy_min_full,
+            float(qxy_max) if qxy_max is not None else qxy_max_full,
+        ]),
+        yaxis=dict(range=[
+            float(qz_min) if qz_min is not None else qz_min_full,
+            float(qz_max) if qz_max is not None else qz_max_full,
+        ]),
+    )
+    return fig
 
 
 # ─────────────────────────────────────────────────────────────────────────────
