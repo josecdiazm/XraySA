@@ -145,6 +145,20 @@ def _gi_horizontal_section():
             dcc.Input(id="gi-horiz-qz-max", type="number", placeholder="max",
                       style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
+        html.Div([
+            _label("Side"),
+            dcc.Dropdown(
+                id="gi-horiz-side",
+                options=[
+                    {"label": "Right (qxy ≥ 0)", "value": "right"},
+                    {"label": "Left (qxy ≤ 0)",  "value": "left"},
+                    {"label": "Both",            "value": "both"},
+                ],
+                value="right",
+                clearable=False,
+                style={"width": "160px"},
+            ),
+        ], style=_ROW_STYLE),
 
         html.Div([
             dbc.Button("+ Add region", id="gi-horiz-add-btn", color="secondary",

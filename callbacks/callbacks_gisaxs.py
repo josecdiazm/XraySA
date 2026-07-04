@@ -41,6 +41,20 @@ def _region_color(regions_kind: str, index: int) -> str:
     return palette[index % len(palette)]
 
 
+def _horiz_side_ranges(side: str, qxy_min_full: float, qxy_max_full: float):
+    """
+    Split a horizontal region's qxy sweep range by side, so the direct-beam/
+    specular streak straddling qxy=0 doesn't get averaged into the I(qxy)
+    profile. Returns a list of (label_suffix, (lo, hi)) — two entries for
+    "both", one otherwise.
+    """
+    if side == "left":
+        return [("", (qxy_min_full, 0.0))]
+    if side == "both":
+        return [(" (right)", (0.0, qxy_max_full)), (" (left)", (qxy_min_full, 0.0))]
+    return [("", (0.0, qxy_max_full))]  # "right" (default)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Vertical-region accumulator (add / remove / clear)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -122,10 +136,11 @@ def render_vert_list(regions):
     Input({"type": "gi-horiz-remove", "index": ALL}, "n_clicks"),
     State("gi-horiz-qz-min", "value"),
     State("gi-horiz-qz-max", "value"),
+    State("gi-horiz-side", "value"),
     State("gi-horiz-regions-store", "data"),
     prevent_initial_call=True,
 )
-def manage_horiz_regions(add_clicks, clear_clicks, remove_clicks, qz_min, qz_max, regions):
+def manage_horiz_regions(add_clicks, clear_clicks, remove_clicks, qz_min, qz_max, side, regions):
     regions = list(regions or [])
     trigger = ctx.triggered_id
 
@@ -135,7 +150,10 @@ def manage_horiz_regions(add_clicks, clear_clicks, remove_clicks, qz_min, qz_max
     if trigger == "gi-horiz-add-btn":
         if qz_min is None or qz_max is None:
             raise PreventUpdate
-        regions.append({"qz_min": float(qz_min), "qz_max": float(qz_max)})
+        regions.append({
+            "qz_min": float(qz_min), "qz_max": float(qz_max),
+            "side": side or "right",
+        })
         return regions
 
     if isinstance(trigger, dict) and trigger.get("type") == "gi-horiz-remove":
@@ -167,7 +185,8 @@ def render_horiz_list(regions):
                 "backgroundColor": color, "borderRadius": "2px", "marginRight": "6px",
             }),
             html.Span(
-                f"qz=[{region['qz_min']:.3g}, {region['qz_max']:.3g}]",
+                f"qz=[{region['qz_min']:.3g}, {region['qz_max']:.3g}] "
+                f"({region.get('side', 'right')})",
                 style={"fontSize": "0.85rem"},
             ),
             dbc.Button("✕", id={"type": "gi-horiz-remove", "index": i},
@@ -377,13 +396,15 @@ def run_gi_integration(
         )
 
     for i, region in enumerate(horiz_regions or []):
-        fig2d.add_shape(
-            type="rect",
-            x0=qxy_min_full, x1=qxy_max_full,
-            y0=region["qz_min"], y1=region["qz_max"],
-            fillcolor=_region_color("horiz", i),
-            opacity=0.35, line=dict(width=0), layer="above",
-        )
+        side_ranges = _horiz_side_ranges(region.get("side", "right"), qxy_min_full, qxy_max_full)
+        for _label, (x0, x1) in side_ranges:
+            fig2d.add_shape(
+                type="rect",
+                x0=x0, x1=x1,
+                y0=region["qz_min"], y1=region["qz_max"],
+                fillcolor=_region_color("horiz", i),
+                opacity=0.35, line=dict(width=0), layer="above",
+            )
 
     if show_beam_centre and "show" in show_beam_centre:
         fig2d.add_trace(go.Scatter(
@@ -449,30 +470,35 @@ def run_gi_integration(
             )
 
     for i, region in enumerate(horiz_regions or []):
-        try:
-            qxy_x, I = integrate_1d_grazing_incidence(
-                arr, fi,
-                sample_orientation=sample_orientation,
-                incident_angle_rad=incident_angle_rad,
-                tilt_angle_rad=tilt_angle_rad,
-                ip_range=(qxy_min_full, qxy_max_full),
-                oop_range=(region["qz_min"], region["qz_max"]),
-                vertical_integration=False,
-                n_points=n_pts_1d,
-                mask=mask,
-            )
-            keep = I > 0
-            curves.append({
-                "x": qxy_x[keep].tolist(), "y": I[keep].tolist(),
-                "name": f"Horizontal qz=[{region['qz_min']:.3g}, {region['qz_max']:.3g}] → I(qxy)",
-                "color": _region_color("horiz", i),
-            })
-        except Exception as exc:
-            fig1d.add_annotation(
-                text=f"Horizontal region {i} error: {exc}",
-                xref="paper", yref="paper", x=0.5, y=1.1 + 0.05 * i, showarrow=False,
-                font=dict(size=11, color="red"),
-            )
+        side_ranges = _horiz_side_ranges(region.get("side", "right"), qxy_min_full, qxy_max_full)
+        for label_suffix, ip_range in side_ranges:
+            try:
+                qxy_x, I = integrate_1d_grazing_incidence(
+                    arr, fi,
+                    sample_orientation=sample_orientation,
+                    incident_angle_rad=incident_angle_rad,
+                    tilt_angle_rad=tilt_angle_rad,
+                    ip_range=ip_range,
+                    oop_range=(region["qz_min"], region["qz_max"]),
+                    vertical_integration=False,
+                    n_points=n_pts_1d,
+                    mask=mask,
+                )
+                keep = I > 0
+                curves.append({
+                    "x": qxy_x[keep].tolist(), "y": I[keep].tolist(),
+                    "name": (
+                        f"Horizontal qz=[{region['qz_min']:.3g}, {region['qz_max']:.3g}] "
+                        f"→ I(qxy){label_suffix}"
+                    ),
+                    "color": _region_color("horiz", i),
+                })
+            except Exception as exc:
+                fig1d.add_annotation(
+                    text=f"Horizontal region {i}{label_suffix} error: {exc}",
+                    xref="paper", yref="paper", x=0.5, y=1.1 + 0.05 * i, showarrow=False,
+                    font=dict(size=11, color="red"),
+                )
 
     for curve in curves:
         fig1d.add_trace(go.Scatter(
