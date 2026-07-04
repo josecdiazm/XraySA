@@ -317,29 +317,34 @@ def layout():
 
                 # ── Right column: graphs ──────────────────────────────────
                 dbc.Col(
-                    [
-                        dbc.Card([
-                            dbc.CardHeader("Detector image (qxy / qz)"),
-                            dbc.CardBody(
-                                dcc.Graph(
-                                    id="gi-2d-graph",
-                                    style={"height": "550px"},
-                                    config={"scrollZoom": True, "displayModeBar": True},
-                                )
-                            ),
-                        ], className="mb-3"),
-
-                        dbc.Card([
-                            dbc.CardHeader("1-D integrations (azimuthal / vertical / horizontal)"),
-                            dbc.CardBody(
-                                dcc.Graph(
-                                    id="gi-1d-graph",
-                                    style={"height": "450px"},
-                                    config={"displayModeBar": True},
-                                )
-                            ),
-                        ]),
-                    ],
+                    dbc.Row([
+                        dbc.Col(
+                            dbc.Card([
+                                dbc.CardHeader("Detector image (qxy / qz)"),
+                                dbc.CardBody(
+                                    dcc.Graph(
+                                        id="gi-2d-graph",
+                                        style={"height": "550px"},
+                                        config={"scrollZoom": True, "displayModeBar": True},
+                                    )
+                                ),
+                            ]),
+                            width=6,
+                        ),
+                        dbc.Col(
+                            dbc.Card([
+                                dbc.CardHeader("1-D integrations (azimuthal / vertical / horizontal)"),
+                                dbc.CardBody(
+                                    dcc.Graph(
+                                        id="gi-1d-graph",
+                                        style={"height": "550px"},
+                                        config={"displayModeBar": True},
+                                    )
+                                ),
+                            ]),
+                            width=6,
+                        ),
+                    ]),
                     width=9,
                 ),
             ]),
