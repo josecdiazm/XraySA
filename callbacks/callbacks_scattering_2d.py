@@ -130,12 +130,16 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
             range=[nrows, 0],       # exact image height, reversed
             showgrid=False,
             zeroline=False,
+            ticks="outside", tickcolor="black", linecolor="black", mirror=True,
+            minor=dict(ticks="outside", tickcolor="black"),
         ),
         xaxis=dict(
             range=[0, ncols],       # exact image width
             constrain="domain",
             showgrid=False,
             zeroline=False,
+            ticks="outside", tickcolor="black", linecolor="black", mirror=True,
+            minor=dict(ticks="outside", tickcolor="black"),
         ),
         xaxis_title="Pixel (col)",
         yaxis_title="Pixel (row)",
@@ -395,6 +399,8 @@ def run_integration(
             constrain="domain",  # wedge/beam-centre overlays must not stretch this
             showgrid=False,
             zeroline=False,
+            ticks="outside", tickcolor="black", linecolor="black", mirror=True,
+            minor=dict(ticks="outside", tickcolor="black"),
         ),
         yaxis=dict(
             scaleanchor="x",
@@ -404,6 +410,8 @@ def run_integration(
             constrain="domain",
             showgrid=False,
             zeroline=False,
+            ticks="outside", tickcolor="black", linecolor="black", mirror=True,
+            minor=dict(ticks="outside", tickcolor="black"),
         ),
     )
 
@@ -682,8 +690,16 @@ def run_cake(
         plot_bgcolor="black",
         paper_bgcolor="white",
         font=dict(family="Arial", size=14, color="black"),
-        xaxis=dict(showgrid=False, zeroline=False, linecolor="black", mirror=True),
-        yaxis=dict(showgrid=False, zeroline=False, linecolor="black", mirror=True),
+        xaxis=dict(
+            showgrid=False, zeroline=False, linecolor="black", mirror=True,
+            ticks="outside", tickcolor="black",
+            minor=dict(ticks="outside", tickcolor="black"),
+        ),
+        yaxis=dict(
+            showgrid=False, zeroline=False, linecolor="black", mirror=True,
+            ticks="outside", tickcolor="black",
+            minor=dict(ticks="outside", tickcolor="black"),
+        ),
     )
     return fig
 
