@@ -75,9 +75,13 @@ def store_uploaded_image(contents, filename):
     Input("scat-mask-low", "value"),
     Input("scat-mask-high", "value"),
     Input("scat-pixel-mask-store", "data"),
+    Input("scat-show-beam-centre", "value"),
+    Input("scat-bcx", "value"),
+    Input("scat-bcy", "value"),
     prevent_initial_call=True,
 )
-def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixel_mask_regions):
+def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixel_mask_regions,
+                     show_beam_centre, bcx, bcy):
     if image_data is None:
         raise PreventUpdate
 
@@ -138,6 +142,21 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
             line=dict(color="red", width=1.5, dash="dot"),
         )
 
+    # Beam centre marker — baked into the figure itself (rather than a
+    # separate overlay callback) so it survives every redraw, regardless
+    # of what triggered it (mask change, colorscale, new image, etc.).
+    if show_beam_centre and "show" in show_beam_centre and bcx is not None and bcy is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=[float(bcx)],
+                y=[float(bcy)],
+                mode="markers",
+                marker=dict(symbol="circle", size=5, color="red", line=dict(color="red", width=0)),
+                name="Beam centre",
+                hovertemplate=f"Beam centre<br>x={bcx}, y={bcy}<extra></extra>",
+            )
+        )
+
     return fig
 
 
@@ -183,6 +202,7 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
     State("scat-wedge-qmin", "value"),
     State("scat-wedge-qmax", "value"),
     State("scat-pixel-mask-store", "data"),
+    State("scat-show-beam-centre", "value"),
     prevent_initial_call=True,
 )
 def run_integration(
@@ -207,6 +227,7 @@ def run_integration(
     wedge_qmin,
     wedge_qmax,
     pixel_mask_regions,
+    show_beam_centre,
 ):
     if not n_clicks or image_data is None:
         raise PreventUpdate
@@ -382,6 +403,18 @@ def run_integration(
                 f"az: [{az_min:.1f}°, {az_max:.1f}°]<br>"
                 f"q: [{q_min_w:.3g}, {q_max_w:.3g}] Å⁻¹<extra></extra>"
             ),
+        ))
+
+    # Beam centre marker — in q-space the beam centre is always the origin,
+    # since integration is performed relative to it.
+    if show_beam_centre and "show" in show_beam_centre:
+        fig_qxy.add_trace(go.Scatter(
+            x=[0.0],
+            y=[0.0],
+            mode="markers",
+            marker=dict(symbol="circle", size=5, color="red", line=dict(color="red", width=0)),
+            name="Beam centre",
+            hovertemplate="Beam centre<br>qx=0, qy=0<extra></extra>",
         ))
 
     q_min = round(float(np.min(q)), 4)
@@ -651,48 +684,9 @@ def toggle_wavelength_energy(choice):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7.  Live beam-centre overlay on the 2-D image
+# 7.  (Beam-centre overlay is now baked directly into render_2d_image / the
+#      q-space figure in run_integration, so it survives every redraw.)
 # ─────────────────────────────────────────────────────────────────────────────
-
-@callback(
-    Output("scat-2d-graph", "figure", allow_duplicate=True),
-    Input("scat-show-beam-centre", "value"),
-    Input("scat-bcx", "value"),
-    Input("scat-bcy", "value"),
-    State("scat-2d-graph", "figure"),
-    prevent_initial_call=True,
-)
-
-def overlay_beam_centre(show, bcx, bcy, current_fig):
-    """
-    Add (or remove) a crosshair marker at the beam centre position
-    without re-rendering the full heatmap.
-    """
-    if current_fig is None:
-        raise PreventUpdate
-
-    import plotly.graph_objects as go   # local re-import is fine here
-
-    fig = go.Figure(current_fig)
-
-    # Drop any previously added beam-centre traces
-    fig.data = tuple(
-        t for t in fig.data if getattr(t, "name", "") != "Beam centre"
-    )
-
-    if show and "show" in show and bcx is not None and bcy is not None:
-        fig.add_trace(
-            go.Scatter(
-                x=[float(bcx)],
-                y=[float(bcy)],
-                mode="markers",
-                marker=dict(symbol="circle", size=5, color="red", line=dict(color="red", width=0)),
-                name="Beam centre",
-                hovertemplate=f"Beam centre<br>x={bcx}, y={bcy}<extra></extra>",
-            )
-        )
-
-    return fig
 
 
 # ─────────────────────────────────────────────────────────────────────────────
