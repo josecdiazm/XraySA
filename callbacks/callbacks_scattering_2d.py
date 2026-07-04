@@ -96,15 +96,15 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
     if log_scale and "log" in (log_scale or []):
         with np.errstate(divide="ignore", invalid="ignore"):
             display = np.where(display > 0, np.log10(display), np.nan)
-        colorbar_title = "log(I)"
-    else:
-        colorbar_title = "Intensity"
 
     fig = go.Figure(
         go.Heatmap(
             z=display,
             colorscale=colorscale or "Viridis",
-            colorbar=dict(title=colorbar_title, x=1.01, thickness=20, len=0.87, lenmode="fraction"),
+            colorbar=dict(
+                title=dict(text="Scattering Intensity (a.u.)", side="right"),
+                x=1.01, thickness=20, len=0.92, lenmode="fraction",
+            ),
             hovertemplate="col: %{x}<br>row: %{y}<br>value: %{z:.3g}<extra></extra>",
         )
     )
@@ -119,14 +119,21 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, pixe
             scaleratio=1,
             constrain="domain",
             range=[nrows, 0],       # exact image height, reversed
+            showgrid=False,
+            zeroline=False,
         ),
         xaxis=dict(
             range=[0, ncols],       # exact image width
             constrain="domain",
+            showgrid=False,
+            zeroline=False,
         ),
         xaxis_title="Pixel (col)",
         yaxis_title="Pixel (row)",
         uirevision="scat-2d",
+        plot_bgcolor="black",
+        paper_bgcolor="white",
+        font=dict(family="Arial", size=12),
     )
 
     # Outline each defined hot-pixel region so its placement is visible
@@ -342,9 +349,6 @@ def run_integration(
     if log_scale and "log" in (log_scale or []):
         with np.errstate(divide="ignore", invalid="ignore"):
             display_qxy = np.where(display_qxy > 0, np.log10(display_qxy), np.nan)
-        cb_title = "log₁₀(I)"
-    else:
-        cb_title = "Intensity"
 
     fig_qxy = go.Figure(
         go.Heatmap(
@@ -352,7 +356,10 @@ def run_integration(
             y=qy,
             z=display_qxy,
             colorscale=colorscale or "Viridis",
-            colorbar=dict(title=cb_title,  x=1.01, thickness=20, len=0.87, lenmode="fraction"),
+            colorbar=dict(
+                title=dict(text="Scattering Intensity (a.u.)", side="right"),
+                x=1.01, thickness=20, len=0.92, lenmode="fraction",
+            ),
             hovertemplate="qx: %{x:.4g} Å⁻¹<br>qy: %{y:.4g} Å⁻¹<br>I: %{z:.3g}<extra></extra>",
         )
     )
@@ -362,10 +369,15 @@ def run_integration(
         yaxis_title="qy (Å⁻¹)",
         margin=dict(l=10, r=10, t=30, b=10),
         uirevision="scat-2d-q",
+        plot_bgcolor="black",
+        paper_bgcolor="white",
+        font=dict(family="Arial", size=12),
         xaxis=dict(
             range=[float(qx.min()), float(qx.max())],
             autorange=False,   # lock to the heatmap's own data extent — the
             constrain="domain",  # wedge/beam-centre overlays must not stretch this
+            showgrid=False,
+            zeroline=False,
         ),
         yaxis=dict(
             scaleanchor="x",
@@ -373,6 +385,8 @@ def run_integration(
             range=[float(qy.min()), float(qy.max())],
             autorange=False,
             constrain="domain",
+            showgrid=False,
+            zeroline=False,
         ),
     )
 
@@ -480,12 +494,12 @@ def update_1d_plot(q_data, q_range, log_y, log_x, unit):
         fig.add_trace(go.Scatter(
             x=q_plot, y=I_plot,
             error_y=dict(type="data", array=s_plot, visible=True, thickness=1),
-            mode="lines", name="I(q) ± σ", line=dict(width=1.5),
+            mode="lines", name="I(q) ± σ", line=dict(width=2.25, color="#1f77b4"),
         ))
     else:
         fig.add_trace(go.Scatter(
             x=q_plot, y=I_plot,
-            mode="lines", name="I(q)", line=dict(width=1.5),
+            mode="lines", name="I(q)", line=dict(width=2.25, color="#1f77b4"),
         ))
 
     xlabel = _UNIT_LABELS.get(unit, unit or "q (Å⁻¹)")
@@ -502,8 +516,17 @@ def update_1d_plot(q_data, q_range, log_y, log_x, unit):
         hovermode="x unified",
         plot_bgcolor="white",
         paper_bgcolor="white",
-        xaxis=dict(showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True),
-        yaxis=dict(showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True),
+        font=dict(family="Arial", size=12),
+        xaxis=dict(
+            showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True,
+            ticks="outside", exponentformat="power", showexponent="all",
+            minor=dict(ticks="outside"),
+        ),
+        yaxis=dict(
+            showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True,
+            ticks="outside", exponentformat="power", showexponent="all",
+            minor=dict(ticks="outside"),
+        ),
     )
     return fig
 
@@ -631,10 +654,11 @@ def run_cake(
         yaxis_title="Azimuthal angle χ (°)",
         margin=dict(l=10, r=10, t=30, b=10),
         uirevision="scat-cake",
-        plot_bgcolor="white",
+        plot_bgcolor="black",
         paper_bgcolor="white",
-        xaxis=dict(showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True),
-        yaxis=dict(showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True),
+        font=dict(family="Arial", size=12),
+        xaxis=dict(showgrid=False, zeroline=False, linecolor="black", mirror=True),
+        yaxis=dict(showgrid=False, zeroline=False, linecolor="black", mirror=True),
     )
     return fig
 
