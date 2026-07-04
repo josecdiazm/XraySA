@@ -402,8 +402,8 @@ def run_integration(
     )
 
     fig_qxy.update_layout(
-        xaxis_title="qx (Å⁻¹)",
-        yaxis_title="qy (Å⁻¹)",
+        xaxis_title="q<sub>x</sub> (Å⁻¹)",
+        yaxis_title="q<sub>y</sub> (Å⁻¹)",
         margin=dict(l=10, r=10, t=30, b=10),
         uirevision="scat-2d-q",
         plot_bgcolor="black",
