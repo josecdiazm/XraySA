@@ -10,7 +10,7 @@
 (function () {
     var TARGET_ID = "scat-2d-q-graph";
     var PAD = 0.02;
-    var LEN_FRACTION = 0.95;
+    var LEN_FRACTION = 1;
 
     function fixColorbar() {
         // dcc.Graph puts the id we gave it on an *outer wrapper* div; Plotly.js

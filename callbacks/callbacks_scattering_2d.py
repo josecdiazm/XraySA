@@ -106,7 +106,7 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, cbar
 
     colorbar = dict(
         title=dict(text="Scattering Intensity (a.u.)", side="right"),
-        x=1.02, thickness=20, len=0.95, lenmode="fraction",
+        x=1.02, thickness=20, len=1, lenmode="fraction",
         ticks="outside",
         outlinecolor="black", outlinewidth=1,
     )
@@ -379,7 +379,7 @@ def run_integration(
 
     qxy_colorbar = dict(
         title=dict(text="Scattering Intensity (a.u.)", side="right"),
-        x=1.02, thickness=20, len=0.95, lenmode="fraction",
+        x=1.02, thickness=20, len=1, lenmode="fraction",
         ticks="outside",
         outlinecolor="black", outlinewidth=1,
     )

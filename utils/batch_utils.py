@@ -125,7 +125,7 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
 
     colorbar = dict(
         title=dict(text="Scattering Intensity (a.u.)", side="right"),
-        x=1.02, thickness=20, len=0.95, lenmode="fraction",
+        x=1.02, thickness=20, len=1, lenmode="fraction",
         ticks="outside",
         outlinecolor="black", outlinewidth=1,
     )
@@ -183,7 +183,7 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
     ydom = full.layout.yaxis.domain
     fig.data[0].colorbar.x = xdom[1] + 0.02
     fig.data[0].colorbar.y = (ydom[0] + ydom[1]) / 2
-    fig.data[0].colorbar.len = (ydom[1] - ydom[0]) * 0.95
+    fig.data[0].colorbar.len = ydom[1] - ydom[0]
     fig.data[0].colorbar.yanchor = "middle"
 
     stem = os.path.splitext(os.path.basename(file_path))[0]
