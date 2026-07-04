@@ -191,6 +191,18 @@ def _integration_section():
                       style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
 
+        # Mask thresholds
+        html.Div([
+            _label("Mask below"),
+            dcc.Input(id="scat-mask-low", type="number", placeholder="min", debounce=True,
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("Mask above"),
+            dcc.Input(id="scat-mask-high", type="number", placeholder="max",  debounce=True,
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+
         # Azimuthal range
         html.Div([
             _label("Azimuth min (°)"),
@@ -335,18 +347,6 @@ def _wedge_section():
 def _pixel_mask_section():
     return _section(
         "🎭 Hot Pixel Masking",
-
-        # Mask thresholds
-        html.Div([
-            _label("Mask below"),
-            dcc.Input(id="scat-mask-low", type="number", placeholder="min", debounce=True,
-                      style=_INPUT_STYLE),
-        ], style=_ROW_STYLE),
-        html.Div([
-            _label("Mask above"),
-            dcc.Input(id="scat-mask-high", type="number", placeholder="max",  debounce=True,
-                      style=_INPUT_STYLE),
-        ], style=_ROW_STYLE),
 
         html.Div([
             _label("Shape"),
