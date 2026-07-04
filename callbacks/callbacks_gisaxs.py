@@ -31,13 +31,15 @@ from utils.scattering_utils import (
 from callbacks._shared import wedge_overlay_trace, error_figure
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-_VERT_COLORS  = ["#1f77b4", "#17becf", "#2ca02c", "#8c564b", "#9467bd"]
-_HORIZ_COLORS = ["#ff7f0e", "#d62728", "#e377c2", "#bcbd22", "#7f7f7f"]
-_AZIMUTH_COLOR = "beige"
+_VERT_COLORS    = ["#1f77b4", "#17becf", "#2ca02c", "#8c564b", "#9467bd"]
+_HORIZ_COLORS   = ["#ff7f0e", "#d62728", "#e377c2", "#bcbd22", "#7f7f7f"]
+_AZIMUTH_COLORS = ["beige", "orchid", "gold", "turquoise", "salmon"]
+
+_PALETTES = {"vert": _VERT_COLORS, "horiz": _HORIZ_COLORS, "azimuth": _AZIMUTH_COLORS}
 
 
 def _region_color(regions_kind: str, index: int) -> str:
-    palette = _VERT_COLORS if regions_kind == "vert" else _HORIZ_COLORS
+    palette = _PALETTES[regions_kind]
     return palette[index % len(palette)]
 
 
@@ -76,6 +78,83 @@ def _horiz_side_ranges(side: str, qxy_min_full: float, qxy_max_full: float):
 def _vert_side_ranges(side: str, qz_min_full: float, qz_max_full: float):
     """qz sweep range for a vertical region's I(qz) profile."""
     return _side_ranges(side, "upper", "lower", qz_min_full, qz_max_full)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 0.  Azimuthal-region accumulator (add / remove / clear)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("gi-azimuth-regions-store", "data"),
+    Input("gi-azimuth-add-btn", "n_clicks"),
+    Input("gi-azimuth-clear-btn", "n_clicks"),
+    Input({"type": "gi-azimuth-remove", "index": ALL}, "n_clicks"),
+    State("gi-azimuth-min", "value"),
+    State("gi-azimuth-max", "value"),
+    State("gi-wedge-qmin", "value"),
+    State("gi-wedge-qmax", "value"),
+    State("gi-azimuth-regions-store", "data"),
+    prevent_initial_call=True,
+)
+def manage_azimuth_regions(add_clicks, clear_clicks, remove_clicks,
+                            az_min, az_max, q_min, q_max, regions):
+    regions = list(regions or [])
+    trigger = ctx.triggered_id
+
+    if trigger == "gi-azimuth-clear-btn":
+        return []
+
+    if trigger == "gi-azimuth-add-btn":
+        if az_min is None or az_max is None or q_min is None or q_max is None:
+            raise PreventUpdate
+        regions.append({
+            "az_min": float(az_min), "az_max": float(az_max),
+            "q_min": float(q_min), "q_max": float(q_max),
+        })
+        return regions
+
+    if isinstance(trigger, dict) and trigger.get("type") == "gi-azimuth-remove":
+        idx = trigger["index"]
+        if 0 <= idx < len(regions):
+            regions.pop(idx)
+        return regions
+
+    raise PreventUpdate
+
+
+@callback(
+    Output("gi-azimuth-list", "children"),
+    Input("gi-azimuth-regions-store", "data"),
+)
+def render_azimuth_list(regions):
+    if not regions:
+        return html.Div(
+            "No azimuthal regions defined.",
+            style={"color": "#6c757d", "fontStyle": "italic", "fontSize": "0.85rem"},
+        )
+
+    rows = []
+    for i, region in enumerate(regions):
+        color = _region_color("azimuth", i)
+        rows.append(html.Div([
+            html.Span(style={
+                "display": "inline-block", "width": "10px", "height": "10px",
+                "backgroundColor": color, "borderRadius": "2px", "marginRight": "6px",
+            }),
+            html.Span(
+                f"az=[{region['az_min']:.1f}°, {region['az_max']:.1f}°] "
+                f"q=[{region['q_min']:.3g}, {region['q_max']:.3g}]",
+                style={"fontSize": "0.85rem"},
+            ),
+            dbc.Button("✕", id={"type": "gi-azimuth-remove", "index": i},
+                       color="danger", outline=True, size="sm",
+                       style={"padding": "0px 6px", "fontSize": "0.75rem"}),
+        ], style={
+            "display": "flex", "alignItems": "center", "justifyContent": "space-between",
+            "marginBottom": "4px", "padding": "4px 8px",
+            "backgroundColor": "#ffffff", "borderRadius": "4px", "border": "1px solid #dee2e6",
+        }))
+    return rows
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -229,12 +308,15 @@ def render_horiz_list(regions):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  Integrate: build the qxy/qz image + all requested 1-D profiles
+# 3.  Integrate: build the qxy/qz image + compute all requested 1-D profiles
+#
+#     The 1-D plot itself is NOT built here — it's built by
+#     render_gi_1d_plot below, from the curves/notes this callback stores,
+#     so applying a Q Range trim doesn't require re-running any pyFAI calls.
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
     Output("gi-2d-graph", "figure"),
-    Output("gi-1d-graph", "figure"),
     Output("gi-integration-store", "data"),
     Input("gi-integrate-btn", "n_clicks"),
     # Reused geometry / image / mask (Scattering 2D & 1D is the reference tab)
@@ -256,8 +338,6 @@ def render_horiz_list(regions):
     # Reused display options
     State("scat-colorscale-dropdown", "value"),
     State("scat-log-toggle", "value"),
-    State("scat-log-y-toggle", "value"),
-    State("scat-log-x-toggle", "value"),
     State("scat-cbar-min", "value"),
     State("scat-cbar-max", "value"),
     State("scat-show-beam-centre", "value"),
@@ -267,12 +347,8 @@ def render_horiz_list(regions):
     State("gi-sample-orientation", "value"),
     State("gi-npt-ip", "value"),
     State("gi-npt-oop", "value"),
-    # Azimuthal integration
-    State("gi-azimuth-min", "value"),
-    State("gi-azimuth-max", "value"),
-    State("gi-wedge-qmin", "value"),
-    State("gi-wedge-qmax", "value"),
     # Region accumulators
+    State("gi-azimuth-regions-store", "data"),
     State("gi-vert-regions-store", "data"),
     State("gi-horiz-regions-store", "data"),
     State("scat-npts", "value"),
@@ -285,10 +361,9 @@ def run_gi_integration(
     bcx, bcy, px_x_um, px_y_um,
     rot1_deg, rot2_deg, rot3_deg,
     mask_low, mask_high, pixel_mask_regions,
-    colorscale, log_scale, log_y, log_x, cbar_min, cbar_max, show_beam_centre,
+    colorscale, log_scale, cbar_min, cbar_max, show_beam_centre,
     incident_angle_deg, tilt_angle_deg, sample_orientation, npt_ip, npt_oop,
-    az_min, az_max, wedge_qmin, wedge_qmax,
-    vert_regions, horiz_regions,
+    azimuth_regions, vert_regions, horiz_regions,
     n_pts_1d,
 ):
     if not n_clicks or image_data is None:
@@ -320,7 +395,7 @@ def run_gi_integration(
         fi = build_fiber_integrator(ai)
     except Exception as exc:
         empty = error_figure(f"Integrator error: {exc}")
-        return empty, empty, {}
+        return empty, {"curves": [], "notes": [f"Integrator error: {exc}"]}
 
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
     mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
@@ -341,7 +416,7 @@ def run_gi_integration(
         )
     except Exception as exc:
         empty = error_figure(f"GI 2-D integration error: {exc}")
-        return empty, empty, {}
+        return empty, {"curves": [], "notes": [f"GI 2-D integration error: {exc}"]}
 
     qxy_min_full, qxy_max_full = float(qxy.min()), float(qxy.max())
     qz_min_full, qz_max_full = float(qz.min()), float(qz.max())
@@ -405,14 +480,18 @@ def run_gi_integration(
         ),
     )
 
-    # Wedge overlay — drawn directly in (qxy, qz) coordinates. This is a
+    # Wedge overlays — drawn directly in (qxy, qz) coordinates. This is a
     # deliberate simplification: qxy/qz isn't a true polar remap of the
     # detector, so the wedge here is geometrically approximate, matching
     # what was agreed rather than adding a second, geometrically-exact
     # qx/qy panel just to host it.
-    wedge = wedge_overlay_trace(az_min, az_max, wedge_qmin, wedge_qmax, color=_AZIMUTH_COLOR)
-    if wedge is not None:
-        fig2d.add_trace(wedge)
+    for i, region in enumerate(azimuth_regions or []):
+        wedge = wedge_overlay_trace(
+            region["az_min"], region["az_max"], region["q_min"], region["q_max"],
+            color=_region_color("azimuth", i),
+        )
+        if wedge is not None:
+            fig2d.add_trace(wedge)
 
     for i, region in enumerate(vert_regions or []):
         side_ranges = _vert_side_ranges(region.get("side", "upper"), qz_min_full, qz_max_full)
@@ -447,47 +526,41 @@ def run_gi_integration(
         ))
 
     # ── 1-D integrations ────────────────────────────────────────────────────
+    # Only curves + notes are produced here; render_gi_1d_plot below turns
+    # them into the actual figure, so a Q Range trim can re-filter and
+    # redraw without re-running any of this.
     n_pts_1d = int(n_pts_1d or 1000)
-    fig1d = go.Figure()
     curves = []
+    notes = []
 
-    note_count = 0
-
-    def _add_note(text: str):
-        nonlocal note_count
-        fig1d.add_annotation(
-            text=text,
-            xref="paper", yref="paper", x=0.5, y=1.05 + 0.05 * note_count, showarrow=False,
-            font=dict(size=11, color="red"),
-        )
-        note_count += 1
-
-    if az_min is not None and az_max is not None:
+    for i, region in enumerate(azimuth_regions or []):
         try:
             q, I, _sigma = integrate_1d(
                 arr, ai,
                 n_points=n_pts_1d,
                 unit="q_A^-1",
                 mask=mask,
-                azimuth_range=(float(az_min), float(az_max)),
+                azimuth_range=(region["az_min"], region["az_max"]),
             )
             keep = I > 0
             if not keep.any():
-                _add_note("Azimuthal: no valid (unmasked, positive) pixels in this range.")
+                notes.append(
+                    f"Azimuthal region {i}: no valid (unmasked, positive) pixels in this range."
+                )
             else:
                 curves.append({
                     "x": q[keep].tolist(), "y": I[keep].tolist(),
-                    "name": f"Azimuthal [{az_min:.1f}°, {az_max:.1f}°]",
-                    "color": _AZIMUTH_COLOR,
+                    "name": f"Azimuthal [{region['az_min']:.1f}°, {region['az_max']:.1f}°]",
+                    "color": _region_color("azimuth", i),
                 })
         except Exception as exc:
-            _add_note(f"Azimuthal integration error: {exc}")
+            notes.append(f"Azimuthal region {i} error: {exc}")
 
     for i, region in enumerate(vert_regions or []):
         side = region.get("side", "upper")
         side_ranges = _vert_side_ranges(side, qz_min_full, qz_max_full)
         if not side_ranges:
-            _add_note(f"Vertical region {i} ({side}): no qz data on that side for this geometry.")
+            notes.append(f"Vertical region {i} ({side}): no qz data on that side for this geometry.")
             continue
         for label_suffix, oop_range, mirror in side_ranges:
             try:
@@ -504,7 +577,7 @@ def run_gi_integration(
                 )
                 keep = I > 0
                 if not keep.any():
-                    _add_note(
+                    notes.append(
                         f"Vertical region {i}{label_suffix}: no valid (unmasked, positive) "
                         "pixels in this range."
                     )
@@ -523,13 +596,13 @@ def run_gi_integration(
                     "color": _region_color("vert", i),
                 })
             except Exception as exc:
-                _add_note(f"Vertical region {i}{label_suffix} error: {exc}")
+                notes.append(f"Vertical region {i}{label_suffix} error: {exc}")
 
     for i, region in enumerate(horiz_regions or []):
         side = region.get("side", "right")
         side_ranges = _horiz_side_ranges(side, qxy_min_full, qxy_max_full)
         if not side_ranges:
-            _add_note(f"Horizontal region {i} ({side}): no qxy data on that side for this geometry.")
+            notes.append(f"Horizontal region {i} ({side}): no qxy data on that side for this geometry.")
             continue
         for label_suffix, ip_range, mirror in side_ranges:
             try:
@@ -546,7 +619,7 @@ def run_gi_integration(
                 )
                 keep = I > 0
                 if not keep.any():
-                    _add_note(
+                    notes.append(
                         f"Horizontal region {i}{label_suffix}: no valid (unmasked, positive) "
                         "pixels in this range."
                     )
@@ -564,15 +637,55 @@ def run_gi_integration(
                     "color": _region_color("horiz", i),
                 })
             except Exception as exc:
-                _add_note(f"Horizontal region {i}{label_suffix} error: {exc}")
+                notes.append(f"Horizontal region {i}{label_suffix} error: {exc}")
 
+    return fig2d, {"curves": curves, "notes": notes}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4.  Render the combined 1-D plot from stored curves, applying the Q Range
+#     trim live — no pyFAI re-run needed, mirrors update_1d_plot in
+#     callbacks_scattering_2d.py.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("gi-1d-graph", "figure"),
+    Input("gi-integration-store", "data"),
+    Input("gi-qrange-store", "data"),
+    Input("scat-log-y-toggle", "value"),
+    Input("scat-log-x-toggle", "value"),
+    prevent_initial_call=True,
+)
+def render_gi_1d_plot(store_data, q_range, log_y, log_x):
+    if not store_data:
+        raise PreventUpdate
+
+    curves = store_data.get("curves", [])
+    notes = store_data.get("notes", [])
+
+    q_min = q_range.get("q_min") if q_range else None
+    q_max = q_range.get("q_max") if q_range else None
+
+    fig1d = go.Figure()
     for curve in curves:
+        x = np.array(curve["x"])
+        y = np.array(curve["y"])
+        if q_min is not None and q_max is not None:
+            keep = (x >= q_min) & (x <= q_max)
+            x, y = x[keep], y[keep]
         fig1d.add_trace(go.Scatter(
-            x=curve["x"], y=curve["y"],
+            x=x.tolist(), y=y.tolist(),
             mode="lines",
             name=curve["name"],
             line=dict(width=1.5, color=curve["color"]),
         ))
+
+    for note_i, note in enumerate(notes):
+        fig1d.add_annotation(
+            text=note,
+            xref="paper", yref="paper", x=0.5, y=1.05 + 0.05 * note_i, showarrow=False,
+            font=dict(size=11, color="red"),
+        )
 
     ytype = "log" if (log_y and "log" in log_y) else "linear"
     xtype = "log" if (log_x and "log" in log_x) else "linear"
@@ -599,5 +712,21 @@ def run_gi_integration(
             minor=dict(ticks="outside"),
         ),
     )
+    return fig1d
 
-    return fig2d, fig1d, {"curves": curves}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5.  Apply Q Range
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("gi-qrange-store", "data", allow_duplicate=True),
+    Input("gi-qrange-apply-btn", "n_clicks"),
+    State("gi-qrange-min", "value"),
+    State("gi-qrange-max", "value"),
+    prevent_initial_call=True,
+)
+def apply_gi_qrange(n_clicks, q_min, q_max):
+    if q_min is None or q_max is None:
+        raise PreventUpdate
+    return {"q_min": q_min, "q_max": q_max}

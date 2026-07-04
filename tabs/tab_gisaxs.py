@@ -102,6 +102,15 @@ def _gi_azimuthal_section():
             dcc.Input(id="gi-wedge-qmax", type="number", value=1.0, min=0.0, step=0.01,
                       style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
+
+        html.Div([
+            dbc.Button("+ Add region", id="gi-azimuth-add-btn", color="secondary",
+                       size="sm", className="me-2"),
+            dbc.Button("Clear all", id="gi-azimuth-clear-btn", color="danger",
+                       outline=True, size="sm"),
+        ], style={"marginBottom": "10px"}),
+
+        html.Div(id="gi-azimuth-list"),
     )
 
 
@@ -185,12 +194,50 @@ def _gi_horizontal_section():
     )
 
 
+def _gi_qrange_section():
+    return _section(
+        "🔍 Q Range",
+
+        html.Div([
+            _label("Q min"),
+            dcc.Input(
+                id="gi-qrange-min",
+                type="number",
+                value=None,
+                step="0.001",
+                style=_INPUT_STYLE,
+            ),
+        ], style=_ROW_STYLE),
+
+        html.Div([
+            _label("Q max"),
+            dcc.Input(
+                id="gi-qrange-max",
+                type="number",
+                value=None,
+                step="0.001",
+                style=_INPUT_STYLE,
+            ),
+        ], style=_ROW_STYLE),
+
+        html.Div([
+            dbc.Button(
+                "Apply Q Range",
+                id="gi-qrange-apply-btn",
+                color="primary",
+                size="sm",
+                className="w-100",
+            ),
+        ], style={"marginTop": "6px"}),
+    )
+
+
 def _gi_run_section():
     return _section(
         "▶ Run",
         html.Div(
-            "Runs azimuthal (if a range is set above) plus every accumulated "
-            "vertical/horizontal region, and refreshes the combined 1-D plot.",
+            "Runs every accumulated azimuthal/vertical/horizontal region, "
+            "and refreshes the combined 1-D plot.",
             style={"fontSize": "0.78rem", "color": "#6c757d", "marginBottom": "8px"},
         ),
         dbc.Button("Integrate", id="gi-integrate-btn", color="primary", size="sm"),
@@ -206,9 +253,11 @@ def layout():
         fluid=True,
         children=[
 
+            dcc.Store(id="gi-azimuth-regions-store", data=[]),
             dcc.Store(id="gi-vert-regions-store", data=[]),
             dcc.Store(id="gi-horiz-regions-store", data=[]),
             dcc.Store(id="gi-integration-store", data={}),
+            dcc.Store(id="gi-qrange-store", data=None),
 
             html.H4(
                 "Grazing Incidence Scattering (GI-SWAXS)",
@@ -225,6 +274,7 @@ def layout():
                         _gi_azimuthal_section(),
                         _gi_vertical_section(),
                         _gi_horizontal_section(),
+                        _gi_qrange_section(),
                         _gi_run_section(),
                     ],
                     width=3,
