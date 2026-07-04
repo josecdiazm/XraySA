@@ -52,14 +52,20 @@ def _side_ranges(side: str, pos_label: str, neg_label: str, lo_full: float, hi_f
     lo_full >= 0 means there's no negative side at all) — callers should
     treat an empty return as "nothing to integrate on that side", not an
     error, and report it rather than silently plotting nothing.
+
+    Returns a list of (label_suffix, (lo, hi), mirror) tuples. mirror=True
+    for the negative-side entry — its x-values need negating before
+    plotting, since they're otherwise invisible whenever the shared 1-D
+    plot's x-axis is log-scaled (log of a negative number is undefined,
+    so Plotly/matplotlib just drop those points silently).
     """
     both = side == "both"
     candidates = []
     if side in ("right", "upper", "both"):
-        candidates.append((f" ({pos_label})" if both else "", (0.0, hi_full)))
+        candidates.append((f" ({pos_label})" if both else "", (0.0, hi_full), False))
     if side in ("left", "lower", "both"):
-        candidates.append((f" ({neg_label})" if both else "", (lo_full, 0.0)))
-    return [(label, r) for label, r in candidates if r[0] < r[1]]
+        candidates.append((f" ({neg_label})" if both else "", (lo_full, 0.0), True))
+    return [(label, r, mirror) for label, r, mirror in candidates if r[0] < r[1]]
 
 
 def _horiz_side_ranges(side: str, qxy_min_full: float, qxy_max_full: float):
@@ -410,7 +416,7 @@ def run_gi_integration(
 
     for i, region in enumerate(vert_regions or []):
         side_ranges = _vert_side_ranges(region.get("side", "upper"), qz_min_full, qz_max_full)
-        for _label, (y0, y1) in side_ranges:
+        for _label, (y0, y1), _mirror in side_ranges:
             fig2d.add_shape(
                 type="rect",
                 x0=region["qxy_min"], x1=region["qxy_max"],
@@ -421,7 +427,7 @@ def run_gi_integration(
 
     for i, region in enumerate(horiz_regions or []):
         side_ranges = _horiz_side_ranges(region.get("side", "right"), qxy_min_full, qxy_max_full)
-        for _label, (x0, x1) in side_ranges:
+        for _label, (x0, x1), _mirror in side_ranges:
             fig2d.add_shape(
                 type="rect",
                 x0=x0, x1=x1,
@@ -483,7 +489,7 @@ def run_gi_integration(
         if not side_ranges:
             _add_note(f"Vertical region {i} ({side}): no qz data on that side for this geometry.")
             continue
-        for label_suffix, oop_range in side_ranges:
+        for label_suffix, oop_range, mirror in side_ranges:
             try:
                 qz_x, I = integrate_1d_grazing_incidence(
                     arr, fi,
@@ -503,8 +509,13 @@ def run_gi_integration(
                         "pixels in this range."
                     )
                     continue
+                # The lower/negative side is otherwise invisible whenever the
+                # shared x-axis is log-scaled (log of a negative number is
+                # undefined) — mirror it to positive, matching how the
+                # original notebook plots -qxy_1d_left_filtered.
+                x_vals = -qz_x[keep] if mirror else qz_x[keep]
                 curves.append({
-                    "x": qz_x[keep].tolist(), "y": I[keep].tolist(),
+                    "x": x_vals.tolist(), "y": I[keep].tolist(),
                     "name": (
                         f"Vertical qxy=[{region['qxy_min']:.3g}, {region['qxy_max']:.3g}] "
                         f"→ I(qz){label_suffix}"
@@ -520,7 +531,7 @@ def run_gi_integration(
         if not side_ranges:
             _add_note(f"Horizontal region {i} ({side}): no qxy data on that side for this geometry.")
             continue
-        for label_suffix, ip_range in side_ranges:
+        for label_suffix, ip_range, mirror in side_ranges:
             try:
                 qxy_x, I = integrate_1d_grazing_incidence(
                     arr, fi,
@@ -540,8 +551,12 @@ def run_gi_integration(
                         "pixels in this range."
                     )
                     continue
+                # Mirror the left side to positive x — otherwise invisible
+                # whenever the shared x-axis is log-scaled, same reasoning
+                # as the vertical region's lower side above.
+                x_vals = -qxy_x[keep] if mirror else qxy_x[keep]
                 curves.append({
-                    "x": qxy_x[keep].tolist(), "y": I[keep].tolist(),
+                    "x": x_vals.tolist(), "y": I[keep].tolist(),
                     "name": (
                         f"Horizontal qz=[{region['qz_min']:.3g}, {region['qz_max']:.3g}] "
                         f"→ I(qxy){label_suffix}"
