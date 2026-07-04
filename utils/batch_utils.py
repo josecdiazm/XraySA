@@ -10,12 +10,15 @@ import os
 import numpy as np
 import plotly.graph_objects as go
 
+import plotly.io as pio
+
 from utils.scattering_utils import (
     HAS_FABIO,
     integrate_1d,
     integrate_2d_qxy,
     apply_threshold_mask,
     power_of_ten_ticks,
+    cbar_zrange,
 )
 
 if HAS_FABIO:
@@ -101,6 +104,7 @@ def process_file_1d(file_path: str, ai, *, n_points, unit, mask_low, mask_high,
 
 
 def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
+                         cbar_min=None, cbar_max=None,
                          colorscale, log_scale, output_dir: str) -> str:
     """Integrate one file to a qx/qy remapped image and save a PNG. Returns the output path."""
     arr = load_image_from_disk(file_path)
@@ -117,19 +121,23 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
         with np.errstate(divide="ignore", invalid="ignore"):
             display = np.where(display > 0, np.log10(display), np.nan)
 
+    zmin, zmax = cbar_zrange(cbar_min, cbar_max, log_scale)
+
     colorbar = dict(
         title=dict(text="Scattering Intensity (a.u.)", side="right"),
-        x=1.02, thickness=20, len=1, lenmode="fraction",
+        x=1.02, thickness=20, len=0.95, lenmode="fraction",
         ticks="outside",
+        outlinecolor="black", outlinewidth=1,
     )
     if log_scale:
-        tickvals, ticktext = power_of_ten_ticks(display)
+        tickvals, ticktext = power_of_ten_ticks(display, vmin=zmin, vmax=zmax)
         if tickvals is not None:
             colorbar.update(tickvals=tickvals, ticktext=ticktext)
 
     fig = go.Figure(
         go.Heatmap(
             x=qx, y=qy, z=display,
+            zmin=zmin, zmax=zmax,
             colorscale=colorscale or "Viridis",
             colorbar=colorbar,
         )
@@ -144,6 +152,8 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
             constrain="domain",
             showgrid=False,
             zeroline=False,
+            ticks="outside", tickcolor="black", linecolor="black", mirror=True,
+            minor=dict(ticks="outside", tickcolor="black"),
         ),
         yaxis=dict(
             scaleanchor="x",
@@ -153,6 +163,8 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
             constrain="domain",
             showgrid=False,
             zeroline=False,
+            ticks="outside", tickcolor="black", linecolor="black", mirror=True,
+            minor=dict(ticks="outside", tickcolor="black"),
         ),
         plot_bgcolor="black",
         paper_bgcolor="white",
@@ -160,6 +172,19 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
         width=800,
         height=700,
     )
+
+    # Unlike the interactive q-space plot, this PNG's width/height are fixed,
+    # so the axis domain Plotly will actually render (after scaleanchor +
+    # constrain="domain" shrink one axis to keep pixels square) is fully
+    # knowable here — resolve it and snap the colorbar to the real image
+    # edge instead of leaving a gap for non-square detectors.
+    full = pio.full_figure_for_development(fig, warn=False)
+    xdom = full.layout.xaxis.domain
+    ydom = full.layout.yaxis.domain
+    fig.data[0].colorbar.x = xdom[1] + 0.02
+    fig.data[0].colorbar.y = (ydom[0] + ydom[1]) / 2
+    fig.data[0].colorbar.len = (ydom[1] - ydom[0]) * 0.95
+    fig.data[0].colorbar.yanchor = "middle"
 
     stem = os.path.splitext(os.path.basename(file_path))[0]
     out_path = os.path.join(output_dir, f"{stem}_qspace.png")

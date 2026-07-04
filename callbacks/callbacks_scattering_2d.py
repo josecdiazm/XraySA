@@ -28,6 +28,7 @@ from utils.scattering_utils import (
     q_to_twotheta,
     energy_to_wavelength,
     power_of_ten_ticks as _power_of_ten_ticks,
+    cbar_zrange as _cbar_zrange,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -39,23 +40,6 @@ _UNIT_LABELS = {
     "2th_deg": "2θ (°)",
     "r_mm":    "r (mm)",
 }
-
-
-def _cbar_zrange(cbar_min, cbar_max, is_log):
-    """
-    Convert user-facing Cbar min/max (always entered in raw intensity
-    units, like matplotlib's imshow vmin/vmax) into the zmin/zmax the
-    heatmap trace needs. When the log toggle is on, the displayed array
-    is already log10-transformed, so the bounds must be too.
-    """
-    def _conv(v):
-        if v is None:
-            return None
-        v = float(v)
-        if is_log:
-            return np.log10(v) if v > 0 else None
-        return v
-    return _conv(cbar_min), _conv(cbar_max)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

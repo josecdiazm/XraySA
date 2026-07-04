@@ -37,6 +37,23 @@ def power_of_ten_ticks(display: np.ndarray, vmin: float | None = None, vmax: flo
     ticktext = [f"10{str(e).translate(_SUPERSCRIPT_MAP)}" for e in exps]
     return exps, ticktext
 
+
+def cbar_zrange(cbar_min, cbar_max, is_log: bool):
+    """
+    Convert user-facing Cbar min/max (always entered in raw intensity
+    units, like matplotlib's imshow vmin/vmax) into the zmin/zmax a
+    heatmap trace needs. When the log toggle is on, the displayed array
+    is already log10-transformed, so the bounds must be too.
+    """
+    def _conv(v):
+        if v is None:
+            return None
+        v = float(v)
+        if is_log:
+            return np.log10(v) if v > 0 else None
+        return v
+    return _conv(cbar_min), _conv(cbar_max)
+
 # ── Optional heavy imports ────────────────────────────────────────────────────
 try:
     import fabio
