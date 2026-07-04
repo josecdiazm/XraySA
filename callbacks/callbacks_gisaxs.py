@@ -55,6 +55,19 @@ def _horiz_side_ranges(side: str, qxy_min_full: float, qxy_max_full: float):
     return [("", (0.0, qxy_max_full))]  # "right" (default)
 
 
+def _vert_side_ranges(side: str, qz_min_full: float, qz_max_full: float):
+    """
+    Split a vertical region's qz sweep range by side, same rationale as
+    _horiz_side_ranges but for the I(qz) profile: below-horizon (negative
+    qz) data shouldn't get averaged in with above-horizon data by default.
+    """
+    if side == "lower":
+        return [("", (qz_min_full, 0.0))]
+    if side == "both":
+        return [(" (upper)", (0.0, qz_max_full)), (" (lower)", (qz_min_full, 0.0))]
+    return [("", (0.0, qz_max_full))]  # "upper" (default)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Vertical-region accumulator (add / remove / clear)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,10 +79,11 @@ def _horiz_side_ranges(side: str, qxy_min_full: float, qxy_max_full: float):
     Input({"type": "gi-vert-remove", "index": ALL}, "n_clicks"),
     State("gi-vert-qxy-min", "value"),
     State("gi-vert-qxy-max", "value"),
+    State("gi-vert-side", "value"),
     State("gi-vert-regions-store", "data"),
     prevent_initial_call=True,
 )
-def manage_vert_regions(add_clicks, clear_clicks, remove_clicks, qxy_min, qxy_max, regions):
+def manage_vert_regions(add_clicks, clear_clicks, remove_clicks, qxy_min, qxy_max, side, regions):
     regions = list(regions or [])
     trigger = ctx.triggered_id
 
@@ -79,7 +93,10 @@ def manage_vert_regions(add_clicks, clear_clicks, remove_clicks, qxy_min, qxy_ma
     if trigger == "gi-vert-add-btn":
         if qxy_min is None or qxy_max is None:
             raise PreventUpdate
-        regions.append({"qxy_min": float(qxy_min), "qxy_max": float(qxy_max)})
+        regions.append({
+            "qxy_min": float(qxy_min), "qxy_max": float(qxy_max),
+            "side": side or "upper",
+        })
         return regions
 
     if isinstance(trigger, dict) and trigger.get("type") == "gi-vert-remove":
@@ -111,7 +128,8 @@ def render_vert_list(regions):
                 "backgroundColor": color, "borderRadius": "2px", "marginRight": "6px",
             }),
             html.Span(
-                f"qxy=[{region['qxy_min']:.3g}, {region['qxy_max']:.3g}]",
+                f"qxy=[{region['qxy_min']:.3g}, {region['qxy_max']:.3g}] "
+                f"({region.get('side', 'upper')})",
                 style={"fontSize": "0.85rem"},
             ),
             dbc.Button("✕", id={"type": "gi-vert-remove", "index": i},
@@ -387,13 +405,15 @@ def run_gi_integration(
         fig2d.add_trace(wedge)
 
     for i, region in enumerate(vert_regions or []):
-        fig2d.add_shape(
-            type="rect",
-            x0=region["qxy_min"], x1=region["qxy_max"],
-            y0=qz_min_full, y1=qz_max_full,
-            fillcolor=_region_color("vert", i),
-            opacity=0.35, line=dict(width=0), layer="above",
-        )
+        side_ranges = _vert_side_ranges(region.get("side", "upper"), qz_min_full, qz_max_full)
+        for _label, (y0, y1) in side_ranges:
+            fig2d.add_shape(
+                type="rect",
+                x0=region["qxy_min"], x1=region["qxy_max"],
+                y0=y0, y1=y1,
+                fillcolor=_region_color("vert", i),
+                opacity=0.35, line=dict(width=0), layer="above",
+            )
 
     for i, region in enumerate(horiz_regions or []):
         side_ranges = _horiz_side_ranges(region.get("side", "right"), qxy_min_full, qxy_max_full)
@@ -444,30 +464,35 @@ def run_gi_integration(
             )
 
     for i, region in enumerate(vert_regions or []):
-        try:
-            qz_x, I = integrate_1d_grazing_incidence(
-                arr, fi,
-                sample_orientation=sample_orientation,
-                incident_angle_rad=incident_angle_rad,
-                tilt_angle_rad=tilt_angle_rad,
-                ip_range=(region["qxy_min"], region["qxy_max"]),
-                oop_range=(qz_min_full, qz_max_full),
-                vertical_integration=True,
-                n_points=n_pts_1d,
-                mask=mask,
-            )
-            keep = I > 0
-            curves.append({
-                "x": qz_x[keep].tolist(), "y": I[keep].tolist(),
-                "name": f"Vertical qxy=[{region['qxy_min']:.3g}, {region['qxy_max']:.3g}] → I(qz)",
-                "color": _region_color("vert", i),
-            })
-        except Exception as exc:
-            fig1d.add_annotation(
-                text=f"Vertical region {i} error: {exc}",
-                xref="paper", yref="paper", x=0.5, y=1.05 + 0.05 * i, showarrow=False,
-                font=dict(size=11, color="red"),
-            )
+        side_ranges = _vert_side_ranges(region.get("side", "upper"), qz_min_full, qz_max_full)
+        for label_suffix, oop_range in side_ranges:
+            try:
+                qz_x, I = integrate_1d_grazing_incidence(
+                    arr, fi,
+                    sample_orientation=sample_orientation,
+                    incident_angle_rad=incident_angle_rad,
+                    tilt_angle_rad=tilt_angle_rad,
+                    ip_range=(region["qxy_min"], region["qxy_max"]),
+                    oop_range=oop_range,
+                    vertical_integration=True,
+                    n_points=n_pts_1d,
+                    mask=mask,
+                )
+                keep = I > 0
+                curves.append({
+                    "x": qz_x[keep].tolist(), "y": I[keep].tolist(),
+                    "name": (
+                        f"Vertical qxy=[{region['qxy_min']:.3g}, {region['qxy_max']:.3g}] "
+                        f"→ I(qz){label_suffix}"
+                    ),
+                    "color": _region_color("vert", i),
+                })
+            except Exception as exc:
+                fig1d.add_annotation(
+                    text=f"Vertical region {i}{label_suffix} error: {exc}",
+                    xref="paper", yref="paper", x=0.5, y=1.05 + 0.05 * i, showarrow=False,
+                    font=dict(size=11, color="red"),
+                )
 
     for i, region in enumerate(horiz_regions or []):
         side_ranges = _horiz_side_ranges(region.get("side", "right"), qxy_min_full, qxy_max_full)

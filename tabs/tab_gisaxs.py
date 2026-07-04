@@ -119,6 +119,20 @@ def _gi_vertical_section():
             dcc.Input(id="gi-vert-qxy-max", type="number", placeholder="max",
                       style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
+        html.Div([
+            _label("Side"),
+            dcc.Dropdown(
+                id="gi-vert-side",
+                options=[
+                    {"label": "Upper (qz ≥ 0)", "value": "upper"},
+                    {"label": "Lower (qz ≤ 0)", "value": "lower"},
+                    {"label": "Both",           "value": "both"},
+                ],
+                value="upper",
+                clearable=False,
+                style={"width": "160px"},
+            ),
+        ], style=_ROW_STYLE),
 
         html.Div([
             dbc.Button("+ Add region", id="gi-vert-add-btn", color="secondary",
