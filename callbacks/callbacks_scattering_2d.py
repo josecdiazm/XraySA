@@ -364,13 +364,15 @@ def run_integration(
         uirevision="scat-2d-q",
         xaxis=dict(
             range=[float(qx.min()), float(qx.max())],
-            constrain="domain",
+            autorange=False,   # lock to the heatmap's own data extent — the
+            constrain="domain",  # wedge/beam-centre overlays must not stretch this
         ),
         yaxis=dict(
             scaleanchor="x",
             scaleratio=1,
-            constrain="domain",
             range=[float(qy.min()), float(qy.max())],
+            autorange=False,
+            constrain="domain",
         ),
     )
 
@@ -396,9 +398,10 @@ def run_integration(
             x=wedge_x,
             y=wedge_y,
             mode="lines",
-            line=dict(color="white", width=1.5, dash="dash"),
+            line=dict(color="beige", width=1.5, dash="2px,2px"),
             fill="none",
             name="Wedge",
+            showlegend=False,
             hovertemplate=(
                 f"az: [{az_min:.1f}°, {az_max:.1f}°]<br>"
                 f"q: [{q_min_w:.3g}, {q_max_w:.3g}] Å⁻¹<extra></extra>"
@@ -414,6 +417,7 @@ def run_integration(
             mode="markers",
             marker=dict(symbol="circle", size=5, color="red", line=dict(color="red", width=0)),
             name="Beam centre",
+            showlegend=False,
             hovertemplate="Beam centre<br>qx=0, qy=0<extra></extra>",
         ))
 

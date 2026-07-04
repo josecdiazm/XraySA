@@ -334,7 +334,7 @@ def _wedge_section():
 
 def _pixel_mask_section():
     return _section(
-        "🎯 Hot Pixel Masking",
+        "🎭 Hot Pixel Masking",
 
         html.Div([
             _label("Shape"),
