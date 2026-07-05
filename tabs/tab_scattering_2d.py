@@ -203,18 +203,6 @@ def _integration_section():
                       style=_INPUT_STYLE),
         ], style=_ROW_STYLE),
 
-        # Azimuthal range
-        html.Div([
-            _label("Azimuth min (°)"),
-            dcc.Input(id="scat-azimuth-min", type="number", placeholder="-180",
-                      style=_INPUT_STYLE),
-        ], style=_ROW_STYLE),
-        html.Div([
-            _label("Azimuth max (°)"),
-            dcc.Input(id="scat-azimuth-max", type="number", placeholder="180",
-                      style=_INPUT_STYLE),
-        ], style=_ROW_STYLE),
-
         # Error model
         html.Div([
             _label("Error model"),
@@ -310,6 +298,17 @@ def _wedge_section():
     return _section(
         "🔺 Azimuthal wedge",
 
+        html.Div([
+            _label("Azimuth min (°)"),
+            dcc.Input(id="scat-azimuth-min", type="number", placeholder="-180",
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("Azimuth max (°)"),
+            dcc.Input(id="scat-azimuth-max", type="number", placeholder="180",
+                      style=_INPUT_STYLE),
+        ], style=_ROW_STYLE),
+
         # Inner q radius
         html.Div([
             _label("q min (Å⁻¹)"),
@@ -336,11 +335,14 @@ def _wedge_section():
             ),
         ], style=_ROW_STYLE),
 
-        # # Draw button
-        # html.Div([
-        #     dbc.Button("Draw wedge", id="scat-draw-wedge-btn", color="warning",
-        #                size="sm", outline=True, n_clicks=1),
-        # ], style={"marginTop": "6px"}),
+        html.Div([
+            dbc.Button("+ Add region", id="scat-azimuth-add-btn", color="secondary",
+                       size="sm", className="me-2"),
+            dbc.Button("Clear all", id="scat-azimuth-clear-btn", color="danger",
+                       outline=True, size="sm"),
+        ], style={"marginBottom": "10px"}),
+
+        html.Div(id="scat-azimuth-list"),
     )
 
 
@@ -449,6 +451,7 @@ def layout():
             dcc.Store(id="scat-q-data-store"),    # full q and I arrays from integration
             dcc.Store(id="scat-qrange-store"),    # currently applied q min/max
             dcc.Store(id="scat-pixel-mask-store", data=[]),  # hot-pixel mask regions
+            dcc.Store(id="scat-azimuth-regions-store", data=[]),  # azimuthal wedge regions
             dcc.Download(id="scat-download"),
             
 

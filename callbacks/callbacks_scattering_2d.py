@@ -41,6 +41,12 @@ _UNIT_LABELS = {
     "2th_deg": "2θ (°)",
     "r_mm":    "r (mm)",
 }
+_AZIMUTH_COLORS = ["magenta", "gold", "cyan", "orchid", "chartreuse"]
+_DEFAULT_1D_COLOR = "#1f77b4"
+
+
+def _azimuth_color(index: int) -> str:
+    return _AZIMUTH_COLORS[index % len(_AZIMUTH_COLORS)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -222,16 +228,11 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, cbar
     State("scat-mask-high", "value"),
     State("scat-cbar-min", "value"),
     State("scat-cbar-max", "value"),
-    State("scat-azimuth-min", "value"),
-    State("scat-azimuth-max", "value"),
+    State("scat-azimuth-regions-store", "data"),
     State("scat-error-model", "value"),
     # Display options
     State("scat-colorscale-dropdown", "value"),
     State("scat-log-toggle", "value"),
-    State("scat-log-y-toggle", "value"),
-    State("scat-log-x-toggle", "value"),
-    State("scat-wedge-qmin", "value"),
-    State("scat-wedge-qmax", "value"),
     State("scat-pixel-mask-store", "data"),
     State("scat-show-beam-centre", "value"),
     prevent_initial_call=True,
@@ -250,14 +251,10 @@ def run_integration(
     unit,
     mask_low, mask_high,
     cbar_min, cbar_max,
-    az_min, az_max,
+    azimuth_regions,
     error_model,
     colorscale,
     log_scale,
-    log_y,
-    log_x,
-    wedge_qmin,
-    wedge_qmax,
     pixel_mask_regions,
     show_beam_centre,
 ):
@@ -293,64 +290,52 @@ def run_integration(
         )
     except Exception as exc:
         empty = _error_figure(f"Integrator error: {exc}")
-        return empty, no_update, empty
+        return no_update, no_update, no_update, empty
 
     # ── Mask ─────────────────────────────────────────────────────────────────
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
     mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
 
-    # ── Azimuth range ────────────────────────────────────────────────────────
-    az_range = None
-    if az_min is not None and az_max is not None:
-        az_range = (float(az_min), float(az_max))
-
-    # ── 1-D integration ───────────────────────────────────────────────────────
-    try:
-        q, I, sigma = integrate_1d(
-            arr, ai,
-            n_points=int(n_pts or 1000),
-            unit=unit or "q_A^-1",
-            mask=mask,
-            azimuth_range=az_range,
-            error_model=error_model or None,
-        )
-    except Exception as exc:
-        return _error_figure(f"Integration error: {exc}"), no_update, no_update
-
-    # ── Build 1-D figure ──────────────────────────────────────────────────────
-    fig_1d = go.Figure()
-    if sigma is not None:
-        fig_1d.add_trace(go.Scatter(
-            x=q, y=I,
-            error_y=dict(type="data", array=sigma, visible=True, thickness=1),
-            mode="lines",
-            name="I(q) ± σ",
-            line=dict(width=1.5),
-        ))
+    # ── 1-D integration — one curve per azimuthal region, or a single
+    #    unrestricted (full-azimuth) integration when none are defined ────────
+    curves = []
+    if azimuth_regions:
+        for i, region in enumerate(azimuth_regions):
+            try:
+                q, I, sigma = integrate_1d(
+                    arr, ai,
+                    n_points=int(n_pts or 1000),
+                    unit=unit or "q_A^-1",
+                    mask=mask,
+                    azimuth_range=(region["az_min"], region["az_max"]),
+                    error_model=error_model or None,
+                )
+            except Exception as exc:
+                return no_update, no_update, no_update, _error_figure(f"Integration error: {exc}")
+            curves.append({
+                "q": q.tolist(), "I": I.tolist(),
+                "sigma": sigma.tolist() if sigma is not None else None,
+                "name": f"Azimuthal [{region['az_min']:.1f}°, {region['az_max']:.1f}°]",
+                "color": _azimuth_color(i),
+            })
     else:
-        fig_1d.add_trace(go.Scatter(
-            x=q, y=I,
-            mode="lines",
-            name="I(q)",
-            line=dict(width=1.5),
-        ))
-
-    xlabel = _UNIT_LABELS.get(unit, unit or "q (Å⁻¹)")
-    ytype = "log" if (log_y and "log" in log_y) else "linear"
-    xtype = "log" if (log_x and "log" in log_x) else "linear"
-    fig_1d.update_layout(
-        xaxis_title=xlabel,
-        xaxis_type=xtype,
-        yaxis_title="Intensity (a.u.)",
-        yaxis_type=ytype,
-        margin=dict(l=10, r=10, t=30, b=10),
-        uirevision="scat-1d",
-        hovermode="x unified",
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        xaxis=dict(showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True),
-        yaxis=dict(showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True),
-    )
+        try:
+            q, I, sigma = integrate_1d(
+                arr, ai,
+                n_points=int(n_pts or 1000),
+                unit=unit or "q_A^-1",
+                mask=mask,
+                azimuth_range=None,
+                error_model=error_model or None,
+            )
+        except Exception as exc:
+            return no_update, no_update, no_update, _error_figure(f"Integration error: {exc}")
+        curves.append({
+            "q": q.tolist(), "I": I.tolist(),
+            "sigma": sigma.tolist() if sigma is not None else None,
+            "name": "I(q)",
+            "color": _DEFAULT_1D_COLOR,
+        })
 
     # ── qx/qy remapped 2-D image ──────────────────────────────────────────────
     try:
@@ -360,8 +345,6 @@ def run_integration(
             mask=mask,
         )
     except Exception as exc:
-        #return fig_1d, _build_store(q, I, sigma, unit), _error_figure(f"qx/qy error: {exc}")
-        # return no_update, no_update, no_update, no_update, no_update, _error_figure(f"Integrator error: {exc}")
         return no_update, no_update, no_update, _error_figure(f"Integrator error: {exc}")
 
     
@@ -433,10 +416,14 @@ def run_integration(
     )
 
     
-    # ── Wedge overlay ─────────────────────────────────────────────────────────
-    wedge = wedge_overlay_trace(az_min, az_max, wedge_qmin, wedge_qmax)
-    if wedge is not None:
-        fig_qxy.add_trace(wedge)
+    # ── Wedge overlays — one per azimuthal region ────────────────────────────
+    for i, region in enumerate(azimuth_regions or []):
+        wedge = wedge_overlay_trace(
+            region["az_min"], region["az_max"], region["q_min"], region["q_max"],
+            color=_azimuth_color(i),
+        )
+        if wedge is not None:
+            fig_qxy.add_trace(wedge)
 
     # Beam centre marker — in q-space the beam centre is always the origin,
     # since integration is performed relative to it.
@@ -451,27 +438,14 @@ def run_integration(
             hovertemplate="Beam centre<br>qx=0, qy=0<extra></extra>",
         ))
 
-    q_min = round(float(np.min(q)), 4)
-    q_max = round(float(np.max(q)), 4)
+    store_data = {"curves": curves, "unit": unit}
 
     return (
-        {"q": q.tolist(), "I": I.tolist(), "sigma": sigma.tolist() if sigma is not None else None, "unit": unit},
-        # {"q_min": q_min, "q_max": q_max},
-        # q_min,
-        # q_max,
+        store_data,
         None,   # ← qrange-store starts empty, meaning "no filter applied yet"
-        _build_store(q, I, sigma, unit),
+        store_data,
         fig_qxy,
     )
-
-
-def _build_store(q, I, sigma, unit):
-    return {
-        "q": q.tolist(),
-        "I": I.tolist(),
-        "sigma": sigma.tolist() if sigma is not None else None,
-        "unit": unit,
-    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -491,31 +465,37 @@ def update_1d_plot(q_data, q_range, log_y, log_x, unit):
     if not q_data:
         raise PreventUpdate
 
-    q     = np.array(q_data["q"])
-    I     = np.array(q_data["I"])
-    sigma = np.array(q_data["sigma"]) if q_data["sigma"] is not None else None
-    unit  = q_data.get("unit", unit)
+    curves = q_data.get("curves", [])
+    unit = q_data.get("unit", unit)
 
-    if q_range and q_range.get("q_min") is not None and q_range.get("q_max") is not None:
-        mask = (q >= q_range["q_min"]) & (q <= q_range["q_max"])
-    else:
-        mask = np.ones_like(q, dtype=bool)   # no filter — show full range
-
-    q_plot = q[mask]
-    I_plot = I[mask]
-    s_plot = sigma[mask] if sigma is not None else None
+    q_min = q_range.get("q_min") if q_range else None
+    q_max = q_range.get("q_max") if q_range else None
 
     fig = go.Figure()
-    if s_plot is not None:
+    for curve in curves:
+        q     = np.array(curve["q"])
+        I     = np.array(curve["I"])
+        sigma = np.array(curve["sigma"]) if curve["sigma"] is not None else None
+
+        if q_min is not None and q_max is not None:
+            keep = (q >= q_min) & (q <= q_max)
+        else:
+            keep = np.ones_like(q, dtype=bool)   # no filter — show full range
+
+        q_plot, I_plot = q[keep], I[keep]
+        s_plot = sigma[keep] if sigma is not None else None
+
+        name = curve.get("name", "I(q)")
+        color = curve.get("color", "#1f77b4")
         fig.add_trace(go.Scatter(
             x=q_plot, y=I_plot,
-            error_y=dict(type="data", array=s_plot, visible=True, thickness=1),
-            mode="lines", name="I(q) ± σ", line=dict(width=2.25, color="#1f77b4"),
-        ))
-    else:
-        fig.add_trace(go.Scatter(
-            x=q_plot, y=I_plot,
-            mode="lines", name="I(q)", line=dict(width=2.25, color="#1f77b4"),
+            error_y=(
+                dict(type="data", array=s_plot, visible=True, thickness=1)
+                if s_plot is not None else None
+            ),
+            mode="lines",
+            name=f"{name} ± σ" if s_plot is not None else name,
+            line=dict(width=2.25, color=color),
         ))
 
     xlabel = _UNIT_LABELS.get(unit, unit or "q (Å⁻¹)")
@@ -533,6 +513,7 @@ def update_1d_plot(q_data, q_range, log_y, log_x, unit):
         plot_bgcolor="white",
         paper_bgcolor="white",
         font=dict(family="Arial", size=14, color="black"),
+        legend=dict(font=dict(size=10)),
         xaxis=dict(
             showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True,
             ticks="outside", exponentformat="power", showexponent="all",
@@ -714,20 +695,26 @@ def run_cake(
     prevent_initial_call=True,
 )
 def download_csv(n_clicks, store):
-    if not n_clicks or store is None:
+    if not n_clicks or not store:
         raise PreventUpdate
 
-    q   = store["q"]
-    I   = store["I"]
-    sigma = store["sigma"]
-    unit  = store.get("unit", "q")
+    curves = store.get("curves", [])
+    if not curves:
+        raise PreventUpdate
 
-    header = f"{unit},I"
-    rows   = [f"{qi:.6g},{Ii:.6g}" for qi, Ii in zip(q, I)]
+    unit = store.get("unit", "q")
+    has_sigma = any(c["sigma"] is not None for c in curves)
 
-    if sigma is not None:
-        header += ",sigma"
-        rows = [f"{r},{s:.6g}" for r, s in zip(rows, sigma)]
+    header = f"region,{unit},I" + (",sigma" if has_sigma else "")
+    rows = []
+    for curve in curves:
+        region_label = curve.get("name", "I(q)").replace('"', "'")
+        q, I, sigma = curve["q"], curve["I"], curve["sigma"]
+        for i, (qi, Ii) in enumerate(zip(q, I)):
+            row = f'"{region_label}",{qi:.6g},{Ii:.6g}'
+            if has_sigma:
+                row += f",{sigma[i]:.6g}" if sigma is not None else ","
+            rows.append(row)
 
     content = header + "\n" + "\n".join(rows)
 
@@ -755,6 +742,84 @@ def toggle_wavelength_energy(choice):
 # 7.  (Beam-centre overlay is now baked directly into render_2d_image / the
 #      q-space figure in run_integration, so it survives every redraw.)
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7.5.  Azimuthal wedge region management (add / remove / clear)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("scat-azimuth-regions-store", "data"),
+    Input("scat-azimuth-add-btn", "n_clicks"),
+    Input("scat-azimuth-clear-btn", "n_clicks"),
+    Input({"type": "scat-azimuth-remove", "index": ALL}, "n_clicks"),
+    State("scat-azimuth-min", "value"),
+    State("scat-azimuth-max", "value"),
+    State("scat-wedge-qmin", "value"),
+    State("scat-wedge-qmax", "value"),
+    State("scat-azimuth-regions-store", "data"),
+    prevent_initial_call=True,
+)
+def manage_azimuth_regions(add_clicks, clear_clicks, remove_clicks,
+                            az_min, az_max, q_min, q_max, regions):
+    regions = list(regions or [])
+    trigger = ctx.triggered_id
+
+    if trigger == "scat-azimuth-clear-btn":
+        return []
+
+    if trigger == "scat-azimuth-add-btn":
+        if az_min is None or az_max is None or q_min is None or q_max is None:
+            raise PreventUpdate
+        regions.append({
+            "az_min": float(az_min), "az_max": float(az_max),
+            "q_min": float(q_min), "q_max": float(q_max),
+        })
+        return regions
+
+    if isinstance(trigger, dict) and trigger.get("type") == "scat-azimuth-remove":
+        idx = trigger["index"]
+        if 0 <= idx < len(regions):
+            regions.pop(idx)
+        return regions
+
+    raise PreventUpdate
+
+
+@callback(
+    Output("scat-azimuth-list", "children"),
+    Input("scat-azimuth-regions-store", "data"),
+)
+def render_azimuth_list(regions):
+    if not regions:
+        return html.Div(
+            "No azimuthal regions defined — Integrate 1-D will run one "
+            "unrestricted (full-azimuth) integration.",
+            style={"color": "#6c757d", "fontStyle": "italic", "fontSize": "0.85rem"},
+        )
+
+    rows = []
+    for i, region in enumerate(regions):
+        color = _azimuth_color(i)
+        rows.append(html.Div([
+            html.Span(style={
+                "display": "inline-block", "width": "10px", "height": "10px",
+                "backgroundColor": color, "borderRadius": "2px", "marginRight": "6px",
+            }),
+            html.Span(
+                f"az=[{region['az_min']:.1f}°, {region['az_max']:.1f}°] "
+                f"q=[{region['q_min']:.3g}, {region['q_max']:.3g}]",
+                style={"fontSize": "0.85rem"},
+            ),
+            dbc.Button("✕", id={"type": "scat-azimuth-remove", "index": i},
+                       color="danger", outline=True, size="sm",
+                       style={"padding": "0px 6px", "fontSize": "0.75rem"}),
+        ], style={
+            "display": "flex", "alignItems": "center", "justifyContent": "space-between",
+            "marginBottom": "4px", "padding": "4px 8px",
+            "backgroundColor": "#ffffff", "borderRadius": "4px", "border": "1px solid #dee2e6",
+        }))
+    return rows
 
 
 # ─────────────────────────────────────────────────────────────────────────────
