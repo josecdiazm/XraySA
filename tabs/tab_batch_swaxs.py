@@ -112,17 +112,6 @@ def layout():
                                 ],
                                 value="scattering",
                             ),
-                            html.Div(
-                                "Chooses which tab's geometry/regions drive processing: base "
-                                "detector geometry always comes from Scattering 2D & 1D; "
-                                "Grazing Incidence additionally uses its incident/tilt angle, "
-                                "sample orientation, display range, and azimuthal/vertical/"
-                                "horizontal regions. Resonant Scattering instead reuses whatever "
-                                "folder/energy series, ROIs, and region/range you've already "
-                                "loaded and configured on that tab — this tab's own folder and "
-                                "file list are ignored in that mode.",
-                                style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "6px"},
-                            ),
                         ),
 
                         html.Div(
