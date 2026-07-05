@@ -265,7 +265,8 @@ def layout():
                                         dcc.Graph(
                                             id="reson-2d-graph",
                                             style={"height": "480px"},
-                                            config={"scrollZoom": True, "displayModeBar": True},
+                                            config={"scrollZoom": True, "displayModeBar": True,
+                                                    "toImageButtonOptions": {"format": "png", "scale": 4}},
                                         )
                                     ),
                                 ]),
@@ -278,7 +279,8 @@ def layout():
                                         dcc.Graph(
                                             id="reson-2d-q-graph",
                                             style={"height": "480px"},
-                                            config={"scrollZoom": True, "displayModeBar": True},
+                                            config={"scrollZoom": True, "displayModeBar": True,
+                                                    "toImageButtonOptions": {"format": "png", "scale": 4}},
                                         )
                                     ),
                                 ]),

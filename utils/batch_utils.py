@@ -28,6 +28,11 @@ from utils.scattering_utils import (
     energy_to_wavelength,
 )
 
+# Matches the scale set on the interactive plots' camera-export button
+# (toImageButtonOptions in tabs/tab_scattering_2d.py, tab_gisaxs.py,
+# tab_resonant.py), so batch-exported PNGs hold up to zooming just as well.
+PNG_EXPORT_SCALE = 4
+
 if HAS_FABIO:
     import fabio
 
@@ -261,7 +266,7 @@ def process_file_2d_png(file_path: str, ai, *, n_points, mask_low, mask_high,
 
     stem = os.path.splitext(os.path.basename(file_path))[0]
     out_path = os.path.join(output_dir, f"{stem}_qspace.png")
-    fig.write_image(out_path)
+    fig.write_image(out_path, scale=PNG_EXPORT_SCALE)
 
     return out_path
 
@@ -377,7 +382,7 @@ def process_file_2d_gi_png(file_path: str, ai, *,
 
     stem = os.path.splitext(os.path.basename(file_path))[0]
     out_path = os.path.join(output_dir, f"{stem}_gispace.png")
-    fig.write_image(out_path)
+    fig.write_image(out_path, scale=PNG_EXPORT_SCALE)
 
     return out_path
 

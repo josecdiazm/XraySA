@@ -266,7 +266,12 @@ def integrate_1d(
         npt=n_points,
         unit=unit,
         correctSolidAngle=True,
-        safe=False,
+        # safe=True (pyFAI's default): callers reuse the same `ai` across
+        # multiple regions with different azimuth_range in a loop, and
+        # safe=False would skip revalidating the cached LUT/CSR engine,
+        # silently reusing the *first* region's engine (and its azimuth
+        # range) for every later call on the same integrator.
+        safe=True,
     )
     if mask is not None:
         kwargs["mask"] = mask.astype(np.int8)

@@ -487,7 +487,8 @@ def layout():
                                         dcc.Graph(
                                             id="scat-2d-graph",
                                             style={"height": "550px"},
-                                            config={"scrollZoom": True, "displayModeBar": True},
+                                            config={"scrollZoom": True, "displayModeBar": True,
+                                                    "toImageButtonOptions": {"format": "png", "scale": 4}},
                                         )
                                     ),
                                 ]),
@@ -500,7 +501,8 @@ def layout():
                                         dcc.Graph(
                                             id="scat-2d-q-graph",
                                             style={"height": "550px"},
-                                            config={"scrollZoom": True, "displayModeBar": True},
+                                            config={"scrollZoom": True, "displayModeBar": True,
+                                                    "toImageButtonOptions": {"format": "png", "scale": 4}},
                                         )
                                     ),
                                 ]),
@@ -530,7 +532,8 @@ def layout():
                                         dcc.Graph(
                                             id="scat-cake-graph",
                                             style={"height": "380px"},
-                                            config={"scrollZoom": True, "displayModeBar": True},
+                                            config={"scrollZoom": True, "displayModeBar": True,
+                                                    "toImageButtonOptions": {"format": "png", "scale": 4}},
                                         )
                                     ),
                                 ]),

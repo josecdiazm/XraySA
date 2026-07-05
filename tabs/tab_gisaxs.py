@@ -315,7 +315,8 @@ def layout():
                                     dcc.Graph(
                                         id="gi-2d-graph",
                                         style={"height": "550px"},
-                                        config={"scrollZoom": True, "displayModeBar": True},
+                                        config={"scrollZoom": True, "displayModeBar": True,
+                                                "toImageButtonOptions": {"format": "png", "scale": 4}},
                                     )
                                 ),
                             ]),
