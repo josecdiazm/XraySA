@@ -143,7 +143,7 @@ def _gi_azimuthal_section():
 
 def _gi_vertical_section():
     return _section(
-        "📏 Vertical integration regions (qxy bands → I vs qz)",
+        "📏 Vertical Regions (qxy bands → I vs qz)",
 
         html.Div([
             _label("qxy min (Å⁻¹)"),
@@ -183,7 +183,7 @@ def _gi_vertical_section():
 
 def _gi_horizontal_section():
     return _section(
-        "📐 Horizontal integration regions (qz bands → I vs qxy)",
+        "📐 Horizontal Regions (qz bands → I vs qxy)",
 
         html.Div([
             _label("qz min (Å⁻¹)"),
