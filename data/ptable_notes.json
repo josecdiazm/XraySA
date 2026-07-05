@@ -4,5 +4,11 @@
       "text": "Cannot do EXAFS well due to abundance of Ar in all environments, especially when using PFY or TFY.",
       "date": "2026-07-01"
     }
+  ],
+  "S": [
+    {
+      "text": "Materials must be <50 \u00b5m in thickness for transmission",
+      "date": "2026-07-05"
+    }
   ]
 }
