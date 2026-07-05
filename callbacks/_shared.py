@@ -75,6 +75,16 @@ def wedge_overlay_trace(az_min, az_max, q_min, q_max, *, color="beige"):
     )
 
 
+AZIMUTH_COLORS = ["magenta", "gold", "cyan", "orchid", "chartreuse"]
+DEFAULT_1D_COLOR = "#1f77b4"
+
+
+def azimuth_color(index: int) -> str:
+    """Cycle through AZIMUTH_COLORS — shared so every tab's azimuthal wedges/
+    curves use the same palette instead of drifting out of sync."""
+    return AZIMUTH_COLORS[index % len(AZIMUTH_COLORS)]
+
+
 def error_figure(message: str) -> go.Figure:
     """Return a blank figure with an error annotation."""
     fig = go.Figure()

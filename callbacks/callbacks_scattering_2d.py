@@ -30,7 +30,12 @@ from utils.scattering_utils import (
     power_of_ten_ticks as _power_of_ten_ticks,
     cbar_zrange as _cbar_zrange,
 )
-from callbacks._shared import wedge_overlay_trace, error_figure as _error_figure
+from callbacks._shared import (
+    wedge_overlay_trace,
+    error_figure as _error_figure,
+    azimuth_color as _azimuth_color,
+    DEFAULT_1D_COLOR as _DEFAULT_1D_COLOR,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 _COLORSCALES = ["Viridis", "Inferno", "Plasma", "Hot", "Greys", "Jet"]
@@ -41,12 +46,6 @@ _UNIT_LABELS = {
     "2th_deg": "2θ (°)",
     "r_mm":    "r (mm)",
 }
-_AZIMUTH_COLORS = ["magenta", "gold", "cyan", "orchid", "chartreuse"]
-_DEFAULT_1D_COLOR = "#1f77b4"
-
-
-def _azimuth_color(index: int) -> str:
-    return _AZIMUTH_COLORS[index % len(_AZIMUTH_COLORS)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

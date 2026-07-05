@@ -21,6 +21,7 @@ import callbacks.callbacks_transmission
 import callbacks.callbacks_batch_swaxs
 import callbacks.callbacks_merging
 import callbacks.callbacks_gisaxs
+import callbacks.callbacks_resonant
 
 # ── Background callback manager (for batch progress) ──────────────────────────
 _cache = diskcache.Cache("./cache")
