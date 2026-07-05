@@ -48,31 +48,36 @@ def layout():
                 # ── Left column: controls ─────────────────────────────────
                 dbc.Col(
                     [
-                        _section(
-                            "📁 Input folder",
-                            folder_picker("batch-folder-input"),
-                            dbc.Button(
-                                "Load Folder", id="batch-load-folder-btn",
-                                color="primary", size="sm", className="mt-2",
-                            ),
-                            html.Div(id="batch-folder-status",
-                                     style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
-                        ),
+                        html.Div(
+                            [
+                                _section(
+                                    "📁 Input folder",
+                                    folder_picker("batch-folder-input"),
+                                    dbc.Button(
+                                        "Load Folder", id="batch-load-folder-btn",
+                                        color="primary", size="sm", className="mt-2",
+                                    ),
+                                    html.Div(id="batch-folder-status",
+                                             style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
+                                ),
 
-                        _section(
-                            "🚫 Exclude files containing",
-                            dcc.Input(
-                                id="batch-exclude-input",
-                                type="text",
-                                placeholder="e.g. SAXS, beamstop, WAXS, dry",
-                                debounce=True,
-                                style={"width": "100%"},
-                            ),
-                            html.Div(
-                                "Comma-separated keywords, matched case-insensitively "
-                                "against filenames.",
-                                style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "6px"},
-                            ),
+                                _section(
+                                    "🚫 Exclude files containing",
+                                    dcc.Input(
+                                        id="batch-exclude-input",
+                                        type="text",
+                                        placeholder="e.g. SAXS, beamstop, WAXS, dry",
+                                        debounce=True,
+                                        style={"width": "100%"},
+                                    ),
+                                    html.Div(
+                                        "Comma-separated keywords, matched case-insensitively "
+                                        "against filenames.",
+                                        style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "6px"},
+                                    ),
+                                ),
+                            ],
+                            id="batch-folder-section",
                         ),
 
                         _section(
@@ -84,6 +89,8 @@ def layout():
                                      "value": "scattering"},
                                     {"label": "Grazing Incidence (fiber integrator)",
                                      "value": "gisaxs"},
+                                    {"label": "Resonant Scattering (energy series)",
+                                     "value": "resonant"},
                                 ],
                                 value="scattering",
                             ),
@@ -92,22 +99,53 @@ def layout():
                                 "detector geometry always comes from Scattering 2D & 1D; "
                                 "Grazing Incidence additionally uses its incident/tilt angle, "
                                 "sample orientation, display range, and azimuthal/vertical/"
-                                "horizontal regions.",
+                                "horizontal regions. Resonant Scattering instead reuses whatever "
+                                "folder/energy series, ROIs, and region/range you've already "
+                                "loaded and configured on that tab — this tab's own folder and "
+                                "file list are ignored in that mode.",
                                 style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "6px"},
                             ),
                         ),
 
-                        _section(
-                            "⚙️ Processing mode",
-                            dbc.RadioItems(
-                                id="batch-mode",
-                                options=[
-                                    {"label": "Convert 2D detector images → 2D q-space images (PNG)",
-                                     "value": "2d"},
-                                    {"label": "Process 1D profile only (CSV)", "value": "1d"},
-                                ],
-                                value="1d",
+                        html.Div(
+                            _section(
+                                "⚙️ Processing mode",
+                                dbc.RadioItems(
+                                    id="batch-mode",
+                                    options=[
+                                        {"label": "Convert 2D detector images → 2D q-space images (PNG)",
+                                         "value": "2d"},
+                                        {"label": "Process 1D profile only (CSV)", "value": "1d"},
+                                    ],
+                                    value="1d",
+                                ),
                             ),
+                            id="batch-mode-section",
+                        ),
+
+                        html.Div(
+                            _section(
+                                "📊 Resonant output",
+                                dbc.RadioItems(
+                                    id="batch-resonant-output-mode",
+                                    options=[
+                                        {"label": "Energy-series 1-D profiles (one CSV per energy)",
+                                         "value": "energy_series"},
+                                        {"label": "XANES/NEXAFS (ROI vs. energy, one CSV)",
+                                         "value": "nexafs"},
+                                    ],
+                                    value="energy_series",
+                                ),
+                                html.Div(
+                                    "Energy-series uses the region and start/end/step currently "
+                                    "set in Resonant Scattering's Energy-series section. XANES/"
+                                    "NEXAFS sums the ROIs currently defined there across the "
+                                    "whole loaded series, same as clicking Run NEXAFS.",
+                                    style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "6px"},
+                                ),
+                            ),
+                            id="batch-resonant-output-section",
+                            style={"display": "none"},
                         ),
 
                         _section(
@@ -127,21 +165,25 @@ def layout():
                 # ── Right column: files + progress + log ──────────────────
                 dbc.Col(
                     [
-                        dbc.Card([
-                            dbc.CardHeader("📋 Files to process"),
-                            dbc.CardBody([
-                                html.Div(id="batch-file-count",
-                                         style={"fontSize": "0.85rem", "color": "#495057", "marginBottom": "8px"}),
-                                dcc.Checklist(
-                                    id="batch-file-checklist",
-                                    options=[],
-                                    value=[],
-                                    inputStyle={"marginRight": "6px"},
-                                    labelStyle={"display": "block"},
-                                    style={"maxHeight": "260px", "overflowY": "auto", "fontSize": "0.85rem"},
-                                ),
+                        html.Div(
+                            dbc.Card([
+                                dbc.CardHeader("📋 Files to process"),
+                                dbc.CardBody([
+                                    html.Div(id="batch-file-count",
+                                             style={"fontSize": "0.85rem", "color": "#495057", "marginBottom": "8px"}),
+                                    dcc.Checklist(
+                                        id="batch-file-checklist",
+                                        options=[],
+                                        value=[],
+                                        inputStyle={"marginRight": "6px"},
+                                        labelStyle={"display": "block"},
+                                        style={"maxHeight": "260px", "overflowY": "auto", "fontSize": "0.85rem"},
+                                    ),
+                                ]),
                             ]),
-                        ], className="mb-3"),
+                            id="batch-files-card",
+                            className="mb-3",
+                        ),
 
                         dbc.Card([
                             dbc.CardHeader("Progress"),

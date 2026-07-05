@@ -19,11 +19,38 @@ from utils.batch_utils import (
     process_file_2d_png,
     process_file_1d_gi_csv,
     process_file_2d_gi_png,
+    process_file_energy_series_1d,
 )
+from utils.resonant_utils import compute_nexafs_series, write_nexafs_csv
 from callbacks._shared import register_folder_browse_callback
 
 register_folder_browse_callback("batch-folder-input")
 register_folder_browse_callback("batch-output-folder")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 0.  Toggle sections by integrator mode — Resonant Scattering bypasses this
+#     tab's own folder/file list entirely, reusing whatever's loaded on the
+#     Resonant Scattering tab instead.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("batch-folder-section", "style"),
+    Output("batch-files-card", "style"),
+    Output("batch-mode-section", "style"),
+    Output("batch-resonant-output-section", "style"),
+    Input("batch-integrator-mode", "value"),
+)
+def toggle_integrator_sections(integrator_mode):
+    is_resonant = integrator_mode == "resonant"
+    hidden = {"display": "none"}
+    shown = {}
+    return (
+        hidden if is_resonant else shown,
+        hidden if is_resonant else shown,
+        hidden if is_resonant else shown,
+        shown if is_resonant else hidden,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -139,6 +166,17 @@ _PROGRESS_OUTPUTS = [
         State("gi-horiz-regions-store", "data"),
         State("gi-qrange-min", "value"),
         State("gi-qrange-max", "value"),
+        # Resonant-Scattering-specific (only used when
+        # batch-integrator-mode == "resonant"); this tab's own folder/file
+        # checklist is bypassed entirely in that mode.
+        State("batch-resonant-output-mode", "value"),
+        State("reson-file-store", "data"),
+        State("reson-folder-input", "value"),
+        State("reson-roi-store", "data"),
+        State("reson-energy-region-select", "value"),
+        State("reson-energy-start-idx", "value"),
+        State("reson-energy-end-idx", "value"),
+        State("reson-energy-step", "value"),
     ],
     background=True,
     progress=_PROGRESS_OUTPUTS,
@@ -173,11 +211,26 @@ def run_batch(
     gi_display_qxy_min, gi_display_qxy_max, gi_display_qz_min, gi_display_qz_max,
     gi_azimuth_regions, gi_vert_regions, gi_horiz_regions,
     gi_qrange_min, gi_qrange_max,
+    resonant_output_mode, reson_entries, reson_folder_path, reson_rois,
+    reson_region_choice, reson_start_idx, reson_end_idx, reson_step,
 ):
-    if not selected_files or not folder_path or not output_folder:
-        return 0, "", "Select files, an input folder, and an output folder first.", ""
+    if not output_folder:
+        return 0, "", "Select an output folder first.", ""
 
     os.makedirs(output_folder, exist_ok=True)
+
+    if integrator_mode == "resonant":
+        return _run_resonant_batch(
+            set_progress, output_folder, resonant_output_mode,
+            reson_entries, reson_folder_path, reson_rois,
+            reson_region_choice, azimuth_regions,
+            reson_start_idx, reson_end_idx, reson_step,
+            distance_mm, bcx, bcy, px_x_um, px_y_um, rot1_deg, rot2_deg, rot3_deg,
+            n_pts, unit, mask_low, mask_high,
+        )
+
+    if not selected_files or not folder_path:
+        return 0, "", "Select files and an input folder first.", ""
 
     if wl_or_e == "energy":
         wl_A = energy_to_wavelength(float(energy_keV))
@@ -278,4 +331,99 @@ def run_batch(
 
     total_elapsed = time.time() - start
     final_text = f"Done — {total}/{total} files in {total_elapsed:.1f}s"
+    return 100, f"{total}/{total}", final_text, "\n".join(log_lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3.5.  Resonant Scattering batch export — bypasses this tab's own folder/file
+#       list, reusing whatever's loaded/configured on the Resonant
+#       Scattering tab instead.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run_resonant_batch(
+    set_progress, output_folder, resonant_output_mode,
+    entries, folder_path, rois,
+    region_choice, azimuth_regions,
+    start_idx, end_idx, step,
+    distance_mm, bcx, bcy, px_x_um, px_y_um, rot1_deg, rot2_deg, rot3_deg,
+    n_pts, unit, mask_low, mask_high,
+):
+    if not entries or not folder_path:
+        return 0, "", "Load a folder on the Resonant Scattering tab first.", ""
+
+    if resonant_output_mode == "nexafs":
+        if not rois:
+            return 0, "", "Define at least one ROI on the Resonant Scattering tab first.", ""
+
+        total = len(entries)
+        start_time = time.time()
+
+        def _progress(i, _total):
+            elapsed = time.time() - start_time
+            pct = int(i / total * 100)
+            set_progress((pct, f"{i}/{total}", f"{i}/{total} files — elapsed {elapsed:.1f}s", ""))
+
+        nexafs_data = compute_nexafs_series(
+            entries, folder_path, rois,
+            mask_low=mask_low, mask_high=mask_high,
+            progress_cb=_progress,
+        )
+        out_path = os.path.join(output_folder, "nexafs.csv")
+        write_nexafs_csv(nexafs_data, out_path)
+
+        final_text = f"Done — NEXAFS CSV written for {total} energies in {time.time() - start_time:.1f}s"
+        return 100, f"{total}/{total}", final_text, f"✔ Wrote {os.path.basename(out_path)}"
+
+    # resonant_output_mode == "energy_series"
+    ai = build_integrator(
+        detector_distance_m=float(distance_mm) * 1e-3,
+        wavelength_m=1e-10,  # placeholder — overridden per file below
+        beam_center_x=float(bcx),
+        beam_center_y=float(bcy),
+        pixel_size_x=float(px_x_um) * 1e-6,
+        pixel_size_y=float(px_y_um) * 1e-6,
+        rot1=np.deg2rad(float(rot1_deg or 0)),
+        rot2=np.deg2rad(float(rot2_deg or 0)),
+        rot3=np.deg2rad(float(rot3_deg or 0)),
+    )
+
+    start_idx = max(0, int(start_idx or 0))
+    end_idx = int(end_idx) if end_idx is not None else len(entries) - 1
+    end_idx = min(end_idx, len(entries) - 1)
+    step = max(1, int(step or 1))
+    indices = list(range(start_idx, end_idx + 1, step))
+    if not indices:
+        return 0, "", "No files in the selected index range.", ""
+
+    az_range = None
+    if region_choice != "full" and azimuth_regions:
+        region = azimuth_regions[int(region_choice)]
+        az_range = (region["az_min"], region["az_max"])
+
+    total = len(indices)
+    log_lines = []
+    start_time = time.time()
+
+    for i, idx in enumerate(indices, start=1):
+        entry = entries[idx]
+        file_path = os.path.join(folder_path, entry["filename"])
+        try:
+            out_path = process_file_energy_series_1d(
+                file_path, ai,
+                energy_eV=entry["energy"],
+                n_points=int(n_pts or 1000),
+                unit=unit or "q_A^-1",
+                mask_low=mask_low, mask_high=mask_high,
+                azimuth_range=az_range,
+                output_dir=output_folder,
+            )
+            log_lines.append(f"✔ {entry['filename']} → {os.path.basename(out_path)}")
+        except Exception as exc:
+            log_lines.append(f"✘ {entry['filename']}: {exc}")
+
+        elapsed = time.time() - start_time
+        pct = int(i / total * 100)
+        set_progress((pct, f"{i}/{total}", f"{i}/{total} files — elapsed {elapsed:.1f}s", "\n".join(log_lines)))
+
+    final_text = f"Done — {total}/{total} files in {time.time() - start_time:.1f}s"
     return 100, f"{total}/{total}", final_text, "\n".join(log_lines)

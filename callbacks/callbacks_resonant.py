@@ -18,7 +18,11 @@ from dash import Input, Output, State, ALL, callback, ctx, html
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 
-from utils.resonant_utils import list_and_sort_by_energy, DEFAULT_ENERGY_PATTERN, compute_roi_sums
+from utils.resonant_utils import (
+    list_and_sort_by_energy,
+    DEFAULT_ENERGY_PATTERN,
+    compute_nexafs_series,
+)
 from utils.batch_utils import load_image_from_disk
 from utils.scattering_utils import (
     apply_threshold_mask,
@@ -611,35 +615,21 @@ def run_nexafs(set_progress, n_clicks, entries, folder_path, rois, mask_low, mas
     if not rois:
         return 0, "", "Define at least one ROI region first.", {}
 
-    roi_names = [roi["name"] for roi in rois]
-    roi_sums = {name: [] for name in roi_names}
-    energies = []
-
     total = len(entries)
     start = time.time()
 
-    for i, entry in enumerate(entries, start=1):
-        energies.append(entry["energy"])
-        try:
-            arr = load_image_from_disk(os.path.join(folder_path, entry["filename"]))
-            mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
-            mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
-            display = arr.copy()
-            display[mask] = 0
-            sums = compute_roi_sums(display, rois)
-        except Exception:
-            sums = {name: None for name in roi_names}
-
-        for name in roi_names:
-            roi_sums[name].append(sums.get(name))
-
+    def _progress(i, _total):
         elapsed = time.time() - start
         pct = int(i / total * 100)
         set_progress((pct, f"{i}/{total}", f"{i}/{total} files — elapsed {elapsed:.1f}s"))
 
-    return 100, f"{total}/{total}", f"Done — {total} files in {time.time() - start:.1f}s", {
-        "energies": energies, "roi_sums": roi_sums,
-    }
+    nexafs_data = compute_nexafs_series(
+        entries, folder_path, rois,
+        mask_low=mask_low, mask_high=mask_high, pixel_mask_regions=pixel_mask_regions,
+        progress_cb=_progress,
+    )
+
+    return 100, f"{total}/{total}", f"Done — {total} files in {time.time() - start:.1f}s", nexafs_data
 
 
 @callback(

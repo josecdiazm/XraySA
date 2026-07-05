@@ -25,6 +25,7 @@ from utils.scattering_utils import (
     cbar_zrange,
     horiz_side_ranges,
     vert_side_ranges,
+    energy_to_wavelength,
 )
 
 if HAS_FABIO:
@@ -487,5 +488,43 @@ def process_file_1d_gi_csv(file_path: str, ai, *,
     stem = os.path.splitext(os.path.basename(file_path))[0]
     out_path = os.path.join(output_dir, f"{stem}_gi1D.csv")
     write_multi_curve_csv(curves, out_path, q_min=q_min, q_max=q_max)
+
+    return out_path
+
+
+def process_file_energy_series_1d(file_path: str, ai, *, energy_eV, n_points, unit,
+                                   mask_low, mask_high, pixel_mask_regions=None,
+                                   azimuth_range=None, output_dir: str) -> str:
+    """
+    Integrate one Resonant Scattering energy-series file to a single I(q)
+    profile, with ai.wavelength overridden from that file's own filename-
+    parsed energy right before integrating — mirrors the interactive tab's
+    per-file wavelength override. Writes a plain two-column (q, I) CSV,
+    one file per energy (not combined, unlike the GI/Scattering batch
+    exports). Returns the output path.
+    """
+    arr = load_image_from_disk(file_path)
+
+    wl_A = energy_to_wavelength(energy_eV / 1000.0)
+    ai.wavelength = wl_A * 1e-10
+
+    mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
+    mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
+
+    q, I, _sigma = integrate_1d(
+        arr, ai,
+        n_points=n_points,
+        unit=unit,
+        mask=mask,
+        azimuth_range=azimuth_range,
+    )
+
+    stem = os.path.splitext(os.path.basename(file_path))[0]
+    out_path = os.path.join(output_dir, f"{stem}_energyseries_1D.csv")
+
+    header = f"{unit},I"
+    rows = [f"{qi:.6g},{Ii:.6g}" for qi, Ii in zip(q, I)]
+    with open(out_path, "w") as fh:
+        fh.write(header + "\n" + "\n".join(rows))
 
     return out_path
