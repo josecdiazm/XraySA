@@ -76,20 +76,6 @@ def layout():
                         ),
 
                         _section(
-                            "📋 Files to process",
-                            html.Div(id="batch-file-count",
-                                     style={"fontSize": "0.85rem", "color": "#495057", "marginBottom": "8px"}),
-                            dcc.Checklist(
-                                id="batch-file-checklist",
-                                options=[],
-                                value=[],
-                                inputStyle={"marginRight": "6px"},
-                                labelStyle={"display": "block"},
-                                style={"maxHeight": "260px", "overflowY": "auto", "fontSize": "0.85rem"},
-                            ),
-                        ),
-
-                        _section(
                             "🔬 Integrator",
                             dbc.RadioItems(
                                 id="batch-integrator-mode",
@@ -138,9 +124,25 @@ def layout():
                     style={"overflowY": "auto", "maxHeight": "92vh", "paddingRight": "8px"},
                 ),
 
-                # ── Right column: progress + log ──────────────────────────
+                # ── Right column: files + progress + log ──────────────────
                 dbc.Col(
                     [
+                        dbc.Card([
+                            dbc.CardHeader("📋 Files to process"),
+                            dbc.CardBody([
+                                html.Div(id="batch-file-count",
+                                         style={"fontSize": "0.85rem", "color": "#495057", "marginBottom": "8px"}),
+                                dcc.Checklist(
+                                    id="batch-file-checklist",
+                                    options=[],
+                                    value=[],
+                                    inputStyle={"marginRight": "6px"},
+                                    labelStyle={"display": "block"},
+                                    style={"maxHeight": "260px", "overflowY": "auto", "fontSize": "0.85rem"},
+                                ),
+                            ]),
+                        ], className="mb-3"),
+
                         dbc.Card([
                             dbc.CardHeader("Progress"),
                             dbc.CardBody([
