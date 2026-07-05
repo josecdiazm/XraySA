@@ -143,15 +143,15 @@ def make_legend():
         chips.append(
             html.Div([
                 html.Div(style={
-                    "width": "22px", "height": "16px",
+                    "width": "34px", "height": "24px",
                     "backgroundColor": color,
                     "border": "1px solid #555",
                     "borderRadius": "3px",
                     "display": "inline-block",
-                    "marginRight": "5px",
+                    "marginRight": "8px",
                     "verticalAlign": "middle",
                 }),
-                html.Span(label, style={"fontSize": "13px", "verticalAlign": "middle"}),
+                html.Span(label, style={"fontSize": "18px", "verticalAlign": "middle"}),
             ], style={"display": "inline-flex", "alignItems": "center",
                       "marginRight": "20px"})
         )
