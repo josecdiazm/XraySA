@@ -60,10 +60,12 @@ def layout():
                                     ),
                                     html.Div(id="batch-folder-status",
                                              style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
-                                ),
 
-                                _section(
-                                    "📤 Or drag & drop files",
+                                    html.Div(
+                                        "or drag & drop files",
+                                        style={"fontSize": "0.78rem", "color": "#6c757d",
+                                               "marginTop": "12px", "marginBottom": "4px"},
+                                    ),
                                     dcc.Upload(
                                         id="batch-upload-files",
                                         children=html.Div(
