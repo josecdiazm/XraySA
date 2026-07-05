@@ -3,6 +3,11 @@
 Small callback helpers shared across callback modules.
 """
 
+import os
+import base64
+import shutil
+import tempfile
+
 import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, callback
@@ -83,6 +88,34 @@ def azimuth_color(index: int) -> str:
     """Cycle through AZIMUTH_COLORS — shared so every tab's azimuthal wedges/
     curves use the same palette instead of drifting out of sync."""
     return AZIMUTH_COLORS[index % len(AZIMUTH_COLORS)]
+
+
+def stage_dropped_files(contents_list, filenames_list, prev_tempdir, *, prefix="xraysa_upload_") -> str:
+    """
+    Decode dcc.Upload's dropped-file contents into a fresh temp folder
+    (removing the previous one first, if any, so a session doesn't
+    accumulate one temp dir per drop), returning that folder's path.
+
+    Callers point their existing folder-path pipeline at the returned
+    directory instead of adding a second, upload-aware file-handling path —
+    this is what lets Batch SWAXS / SWAXS Merging / Resonant Scattering's
+    drag-and-drop reuse 100% of their tested folder-based processing code.
+    """
+    if prev_tempdir and os.path.isdir(prev_tempdir):
+        shutil.rmtree(prev_tempdir, ignore_errors=True)
+
+    tempdir = tempfile.mkdtemp(prefix=prefix)
+
+    for contents, filename in zip(contents_list, filenames_list):
+        try:
+            _header, b64data = contents.split(",", 1)
+            raw = base64.b64decode(b64data)
+            with open(os.path.join(tempdir, filename), "wb") as fh:
+                fh.write(raw)
+        except Exception:
+            continue
+
+    return tempdir
 
 
 def error_figure(message: str) -> go.Figure:

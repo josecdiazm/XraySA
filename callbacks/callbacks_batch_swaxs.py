@@ -6,9 +6,6 @@ Dash callbacks for the Batch SWAXS tab.
 from __future__ import annotations
 import os
 import time
-import base64
-import shutil
-import tempfile
 import numpy as np
 
 from dash import Input, Output, State, callback, no_update
@@ -25,7 +22,7 @@ from utils.batch_utils import (
     process_file_energy_series_1d,
 )
 from utils.resonant_utils import compute_nexafs_series, write_nexafs_csv
-from callbacks._shared import register_folder_browse_callback
+from callbacks._shared import register_folder_browse_callback, stage_dropped_files
 
 register_folder_browse_callback("batch-folder-input")
 register_folder_browse_callback("batch-output-folder")
@@ -78,22 +75,8 @@ def handle_dropped_files(contents_list, filenames_list, prev_tempdir):
     if not contents_list or not filenames_list:
         raise PreventUpdate
 
-    # Drop the previous batch's staging folder so a session doesn't
-    # accumulate one temp directory per drag-and-drop.
-    if prev_tempdir and os.path.isdir(prev_tempdir):
-        shutil.rmtree(prev_tempdir, ignore_errors=True)
-
-    tempdir = tempfile.mkdtemp(prefix="xraysa_batch_upload_")
-
-    for contents, filename in zip(contents_list, filenames_list):
-        try:
-            _header, b64data = contents.split(",", 1)
-            raw = base64.b64decode(b64data)
-            with open(os.path.join(tempdir, filename), "wb") as fh:
-                fh.write(raw)
-        except Exception:
-            continue
-
+    tempdir = stage_dropped_files(contents_list, filenames_list, prev_tempdir,
+                                   prefix="xraysa_batch_upload_")
     files = list_folder_images(tempdir)
     if not files:
         return no_update, tempdir, "✘ None of the dropped files were a supported image format.", tempdir

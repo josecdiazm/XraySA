@@ -39,6 +39,7 @@ from callbacks._shared import (
     wedge_overlay_trace,
     error_figure,
     azimuth_color,
+    stage_dropped_files,
 )
 
 register_folder_browse_callback("reson-folder-input")
@@ -78,6 +79,48 @@ def load_folder(n_clicks, folder_path, exclude_text, energy_pattern):
 
     lo, hi = entries[0]["energy"], entries[-1]["energy"]
     return entries, f"✔ Found {len(entries)} file(s), energy range [{lo:g}, {hi:g}] eV."
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1.5.  Drag-and-drop files → stage into a temp folder, reusing load_folder's
+#       own energy-parsing/sorting unchanged (same trick as Batch SWAXS and
+#       SWAXS Merging's drag-and-drop).
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("reson-file-store", "data", allow_duplicate=True),
+    Output("reson-folder-input", "value", allow_duplicate=True),
+    Output("reson-folder-status", "children", allow_duplicate=True),
+    Output("reson-upload-tempdir-store", "data"),
+    Input("reson-upload-files", "contents"),
+    State("reson-upload-files", "filename"),
+    State("reson-upload-tempdir-store", "data"),
+    State("reson-exclude-input", "value"),
+    State("reson-energy-pattern", "value"),
+    prevent_initial_call=True,
+)
+def handle_dropped_files(contents_list, filenames_list, prev_tempdir, exclude_text, energy_pattern):
+    if not contents_list or not filenames_list:
+        raise PreventUpdate
+
+    tempdir = stage_dropped_files(contents_list, filenames_list, prev_tempdir,
+                                   prefix="xraysa_reson_upload_")
+
+    keywords = (exclude_text or "").split(",")
+    try:
+        entries = list_and_sort_by_energy(tempdir, keywords, energy_pattern or DEFAULT_ENERGY_PATTERN)
+    except Exception as exc:
+        return [], tempdir, f"✘ {exc}", tempdir
+
+    if not entries:
+        return [], tempdir, "✘ None of the dropped files had a parseable energy.", tempdir
+
+    lo, hi = entries[0]["energy"], entries[-1]["energy"]
+    status = (
+        f"✔ Received {len(entries)} dropped file(s), energy range [{lo:g}, {hi:g}] eV — "
+        "staged in a temporary folder for this session."
+    )
+    return entries, tempdir, status, tempdir
 
 
 # ─────────────────────────────────────────────────────────────────────────────

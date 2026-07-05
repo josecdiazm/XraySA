@@ -6,9 +6,6 @@ separate Merge panel that loads two previously-saved averaged files.
 
 from __future__ import annotations
 import os
-import base64
-import shutil
-import tempfile
 import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, State, callback, ctx, no_update
@@ -22,7 +19,7 @@ from utils.merging_utils import (
     write_1d_csv,
 )
 from utils.batch_utils import filter_excluded
-from callbacks._shared import register_folder_browse_callback
+from callbacks._shared import register_folder_browse_callback, stage_dropped_files
 
 register_folder_browse_callback("merge-avg-folder-input")
 register_folder_browse_callback("merge-avg-output-folder")
@@ -65,31 +62,6 @@ def _log_axes_layout(unit: str, **extra) -> dict:
     return layout
 
 
-def _stage_dropped_files(contents_list, filenames_list, prev_tempdir):
-    """
-    Decode dropped-file contents into a fresh temp folder (removing the
-    previous one first, if any, so a session doesn't accumulate one temp
-    dir per drop), returning that folder's path. Callers point their
-    existing folder-path pipeline at it, same trick as Batch SWAXS's
-    drag-and-drop.
-    """
-    if prev_tempdir and os.path.isdir(prev_tempdir):
-        shutil.rmtree(prev_tempdir, ignore_errors=True)
-
-    tempdir = tempfile.mkdtemp(prefix="xraysa_merge_upload_")
-
-    for contents, filename in zip(contents_list, filenames_list):
-        try:
-            _header, b64data = contents.split(",", 1)
-            raw = base64.b64decode(b64data)
-            with open(os.path.join(tempdir, filename), "wb") as fh:
-                fh.write(raw)
-        except Exception:
-            continue
-
-    return tempdir
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Average panel: load folder → select files → average → save
 # ─────────────────────────────────────────────────────────────────────────────
@@ -127,7 +99,7 @@ def handle_avg_dropped_files(contents_list, filenames_list, prev_tempdir):
     if not contents_list or not filenames_list:
         raise PreventUpdate
 
-    tempdir = _stage_dropped_files(contents_list, filenames_list, prev_tempdir)
+    tempdir = stage_dropped_files(contents_list, filenames_list, prev_tempdir, prefix="xraysa_merge_upload_")
     files = list_csv_files(tempdir)
     if not files:
         return no_update, tempdir, "✘ None of the dropped files were a supported CSV/TXT profile.", tempdir
@@ -288,7 +260,7 @@ def handle_files_dropped_files(contents_list, filenames_list, prev_tempdir):
     if not contents_list or not filenames_list:
         raise PreventUpdate
 
-    tempdir = _stage_dropped_files(contents_list, filenames_list, prev_tempdir)
+    tempdir = stage_dropped_files(contents_list, filenames_list, prev_tempdir, prefix="xraysa_merge_upload_")
     files = list_csv_files(tempdir)
     if not files:
         return no_update, tempdir, "✘ None of the dropped files were a supported CSV/TXT profile.", no_update, no_update, tempdir

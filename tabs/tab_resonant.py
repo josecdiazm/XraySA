@@ -69,6 +69,21 @@ def _folder_section():
         dbc.Button("Load Folder", id="reson-load-folder-btn", color="primary", size="sm"),
         html.Div(id="reson-folder-status",
                  style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
+
+        dcc.Upload(
+            id="reson-upload-files",
+            children=html.Div(
+                ["Or drag & drop files here, or ", html.A("select files")],
+                style={"textAlign": "center", "padding": "14px", "color": "#6c757d"},
+            ),
+            style={
+                "border": "2px dashed #ced4da",
+                "borderRadius": "6px",
+                "cursor": "pointer",
+                "marginTop": "8px",
+            },
+            multiple=True,
+        ),
     )
 
 
@@ -224,6 +239,7 @@ def layout():
             dcc.Store(id="reson-energy-store", data={}),
             dcc.Store(id="reson-1d-data-store", data={}),
             dcc.Store(id="reson-qrange-store", data=None),
+            dcc.Store(id="reson-upload-tempdir-store", data=None),
 
             html.H4(
                 "Resonant Scattering",
