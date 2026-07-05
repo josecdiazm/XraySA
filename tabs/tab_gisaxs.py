@@ -286,10 +286,6 @@ def layout():
             dcc.Store(id="gi-integration-store", data={}),
             dcc.Store(id="gi-qrange-store", data=None),
 
-            html.H4(
-                "Grazing Incidence Scattering (GI-SWAXS)",
-                style={"margin": "16px 0 4px"},
-            ),
             html.Hr(style={"marginTop": "4px"}),
 
             dbc.Row([

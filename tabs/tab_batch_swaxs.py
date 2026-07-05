@@ -35,7 +35,6 @@ def layout():
             dcc.Store(id="batch-all-files", data=[]),
             dcc.Store(id="batch-upload-tempdir-store", data=None),
 
-            html.H4("Batch SWAXS", style={"margin": "16px 0 4px"}),
             html.P(
                 "Batch-process a folder of detector images using the Geometry, "
                 "Integration Options, Q Range, and Display Options currently set "

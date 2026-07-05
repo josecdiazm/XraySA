@@ -236,10 +236,6 @@ def layout():
             dcc.Store(id="reson-qrange-store", data=None),
             dcc.Store(id="reson-upload-tempdir-store", data=None),
 
-            html.H4(
-                "Resonant Scattering",
-                style={"margin": "16px 0 4px"},
-            ),
             html.Hr(style={"marginTop": "4px"}),
 
             dbc.Row([

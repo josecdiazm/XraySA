@@ -455,10 +455,6 @@ def layout():
             dcc.Download(id="scat-download"),
             
 
-            html.H4(
-                "2-D Scattering Viewer & Integrator",
-                style={"margin": "16px 0 4px"},
-            ),
             html.Hr(style={"marginTop": "4px"}),
 
             dbc.Row([

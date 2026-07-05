@@ -213,7 +213,6 @@ def layout():
         fluid=True,
         children=[
 
-            html.H4("SWAXS Merging", style={"margin": "16px 0 4px"}),
             html.P(
                 "Average a set of 1-D scans and save the result, then merge "
                 "previously-saved averaged SAXS/WAXS profiles into one "
