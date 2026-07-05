@@ -42,5 +42,6 @@ The app runs at [http://127.0.0.1:8050](http://127.0.0.1:8050).
 
 - Built on [pyFAI](https://pyfai.readthedocs.io/) for detector calibration/azimuthal integration and [fabio](https://fabio.readthedocs.io/) for reading detector image formats (edf, cbf, tif, etc.), in addition to `.npy`/`.npz`.
 - Batch SWAXS uses Dash's background callbacks (`dash[diskcache]`) for progress bars on long-running batch jobs.
-- The native folder-picker dialog (used in Batch SWAXS and SWAXS Merging) relies on `osascript` and only works on macOS; other platforms need the folder path typed in manually.
+- Folder inputs (Batch SWAXS, SWAXS Merging) can be filled via a native folder-picker dialog, cross-platform through tkinter, run in a subprocess to avoid freezing the app.
+- File inputs (Resonant Scattering, SWAXS Merging, Batch SWAXS) also support drag-and-drop as an alternative to browsing.
 - This is a local-only tool (server and browser on the same machine) — it is not hardened for exposure on a network.
