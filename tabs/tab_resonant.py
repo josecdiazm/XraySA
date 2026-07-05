@@ -247,25 +247,32 @@ def layout():
                             ),
                         ], className="mb-3"),
 
-                        dbc.Card([
-                            dbc.CardHeader("1-D profile (selected file)"),
-                            dbc.CardBody(
-                                dcc.Graph(
-                                    id="reson-1d-graph",
-                                    style={"height": "380px"},
-                                    config={"displayModeBar": True},
-                                )
+                        dbc.Row([
+                            dbc.Col(
+                                dbc.Card([
+                                    dbc.CardHeader("1-D profile (selected file)"),
+                                    dbc.CardBody(
+                                        dcc.Graph(
+                                            id="reson-1d-graph",
+                                            style={"height": "420px"},
+                                            config={"displayModeBar": True},
+                                        )
+                                    ),
+                                ]),
+                                width=6,
                             ),
-                        ], className="mb-3"),
-
-                        dbc.Card([
-                            dbc.CardHeader("Energy-series 1-D overlay"),
-                            dbc.CardBody(
-                                dcc.Graph(
-                                    id="reson-energy-graph",
-                                    style={"height": "420px"},
-                                    config={"displayModeBar": True},
-                                )
+                            dbc.Col(
+                                dbc.Card([
+                                    dbc.CardHeader("Energy-series 1-D overlay"),
+                                    dbc.CardBody(
+                                        dcc.Graph(
+                                            id="reson-energy-graph",
+                                            style={"height": "420px"},
+                                            config={"displayModeBar": True},
+                                        )
+                                    ),
+                                ]),
+                                width=6,
                             ),
                         ], className="mb-3"),
 
