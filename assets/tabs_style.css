@@ -1,0 +1,10 @@
+/* Make the active top-level tab impossible to miss: invert Flatly's
+   active-tab text color (#18bc9c) into a solid highlight — green
+   background, white text — instead of just a colored underline/label. */
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-link.active:hover,
+.nav-tabs .nav-link.active:focus {
+    background-color: #18bc9c;
+    color: #ffffff;
+    border-color: #18bc9c #18bc9c #18bc9c;
+}
