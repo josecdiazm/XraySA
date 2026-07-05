@@ -33,6 +33,7 @@ def layout():
 
             # Hidden stores
             dcc.Store(id="batch-all-files", data=[]),
+            dcc.Store(id="batch-upload-tempdir-store", data=None),
 
             html.H4("Batch SWAXS", style={"margin": "16px 0 4px"}),
             html.P(
@@ -59,6 +60,32 @@ def layout():
                                     ),
                                     html.Div(id="batch-folder-status",
                                              style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
+                                ),
+
+                                _section(
+                                    "📤 Or drag & drop files",
+                                    dcc.Upload(
+                                        id="batch-upload-files",
+                                        children=html.Div(
+                                            ["Drag & drop files here, or ", html.A("select files")],
+                                            style={"textAlign": "center", "padding": "18px", "color": "#6c757d"},
+                                        ),
+                                        style={
+                                            "border": "2px dashed #ced4da",
+                                            "borderRadius": "6px",
+                                            "cursor": "pointer",
+                                        },
+                                        multiple=True,
+                                    ),
+                                    html.Div(
+                                        "Alternative to the folder path above — useful when your "
+                                        "files aren't already on the machine running this app "
+                                        "(e.g. a different computer, or no native folder-browse "
+                                        "support on this OS). Dropped files are staged in a "
+                                        "temporary folder and the path above is filled in "
+                                        "automatically.",
+                                        style={"fontSize": "0.78rem", "color": "#6c757d", "marginTop": "8px"},
+                                    ),
                                 ),
 
                                 _section(

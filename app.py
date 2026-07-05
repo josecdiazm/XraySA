@@ -34,7 +34,7 @@ app = dash.Dash(
     background_callback_manager=background_callback_manager,
 )
 
-app.title = "X-Ray Spectroscopy & Scattering Tools"
+app.title = "X-Ray Scattering Analysis Tools"
 
 app.layout = dbc.Container(
     fluid=True,
