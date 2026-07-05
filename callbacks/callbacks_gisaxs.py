@@ -27,6 +27,8 @@ from utils.scattering_utils import (
     energy_to_wavelength,
     power_of_ten_ticks,
     cbar_zrange,
+    horiz_side_ranges as _horiz_side_ranges,
+    vert_side_ranges as _vert_side_ranges,
 )
 from callbacks._shared import wedge_overlay_trace, error_figure
 
@@ -41,43 +43,6 @@ _PALETTES = {"vert": _VERT_COLORS, "horiz": _HORIZ_COLORS, "azimuth": _AZIMUTH_C
 def _region_color(regions_kind: str, index: int) -> str:
     palette = _PALETTES[regions_kind]
     return palette[index % len(palette)]
-
-
-def _side_ranges(side: str, pos_label: str, neg_label: str, lo_full: float, hi_full: float):
-    """
-    Split a sweep range [lo_full, hi_full] into a positive-side (0, hi_full)
-    and/or negative-side (lo_full, 0) sub-range depending on *side*, so a
-    feature straddling zero (direct-beam streak, specular horizon, …)
-    doesn't get averaged across it by default.
-
-    A candidate side is dropped if it's degenerate for this geometry (e.g.
-    lo_full >= 0 means there's no negative side at all) — callers should
-    treat an empty return as "nothing to integrate on that side", not an
-    error, and report it rather than silently plotting nothing.
-
-    Returns a list of (label_suffix, (lo, hi), mirror) tuples. mirror=True
-    for the negative-side entry — its x-values need negating before
-    plotting, since they're otherwise invisible whenever the shared 1-D
-    plot's x-axis is log-scaled (log of a negative number is undefined,
-    so Plotly/matplotlib just drop those points silently).
-    """
-    both = side == "both"
-    candidates = []
-    if side in ("right", "upper", "both"):
-        candidates.append((f" ({pos_label})" if both else "", (0.0, hi_full), False))
-    if side in ("left", "lower", "both"):
-        candidates.append((f" ({neg_label})" if both else "", (lo_full, 0.0), True))
-    return [(label, r, mirror) for label, r, mirror in candidates if r[0] < r[1]]
-
-
-def _horiz_side_ranges(side: str, qxy_min_full: float, qxy_max_full: float):
-    """qxy sweep range for a horizontal region's I(qxy) profile."""
-    return _side_ranges(side, "right", "left", qxy_min_full, qxy_max_full)
-
-
-def _vert_side_ranges(side: str, qz_min_full: float, qz_max_full: float):
-    """qz sweep range for a vertical region's I(qz) profile."""
-    return _side_ranges(side, "upper", "lower", qz_min_full, qz_max_full)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

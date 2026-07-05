@@ -12,7 +12,14 @@ from dash import Input, Output, State, callback, no_update
 from dash.exceptions import PreventUpdate
 
 from utils.scattering_utils import build_integrator, energy_to_wavelength
-from utils.batch_utils import list_folder_images, filter_excluded, process_file_1d, process_file_2d_png
+from utils.batch_utils import (
+    list_folder_images,
+    filter_excluded,
+    process_file_1d,
+    process_file_2d_png,
+    process_file_1d_gi_csv,
+    process_file_2d_gi_png,
+)
 from callbacks._shared import register_folder_browse_callback
 
 register_folder_browse_callback("batch-folder-input")
@@ -88,6 +95,7 @@ _PROGRESS_OUTPUTS = [
         State("batch-folder-input", "value"),
         State("batch-output-folder", "value"),
         State("batch-mode", "value"),
+        State("batch-integrator-mode", "value"),
         # Geometry
         State("scat-distance", "value"),
         State("scat-wavelength-or-energy", "value"),
@@ -107,8 +115,7 @@ _PROGRESS_OUTPUTS = [
         State("scat-mask-high", "value"),
         State("scat-cbar-min", "value"),
         State("scat-cbar-max", "value"),
-        State("scat-azimuth-min", "value"),
-        State("scat-azimuth-max", "value"),
+        State("scat-azimuth-regions-store", "data"),
         State("scat-error-model", "value"),
         # Q Range
         State("scat-qrange-min", "value"),
@@ -116,6 +123,22 @@ _PROGRESS_OUTPUTS = [
         # Display options
         State("scat-colorscale-dropdown", "value"),
         State("scat-log-toggle", "value"),
+        # Grazing-incidence-specific geometry/regions (only used when
+        # batch-integrator-mode == "gisaxs")
+        State("gi-incident-angle", "value"),
+        State("gi-tilt-angle", "value"),
+        State("gi-sample-orientation", "value"),
+        State("gi-npt-ip", "value"),
+        State("gi-npt-oop", "value"),
+        State("gi-display-qxy-min", "value"),
+        State("gi-display-qxy-max", "value"),
+        State("gi-display-qz-min", "value"),
+        State("gi-display-qz-max", "value"),
+        State("gi-azimuth-regions-store", "data"),
+        State("gi-vert-regions-store", "data"),
+        State("gi-horiz-regions-store", "data"),
+        State("gi-qrange-min", "value"),
+        State("gi-qrange-max", "value"),
     ],
     background=True,
     progress=_PROGRESS_OUTPUTS,
@@ -129,6 +152,7 @@ def run_batch(
     folder_path,
     output_folder,
     mode,
+    integrator_mode,
     distance_mm,
     wl_or_e,
     wavelength_A,
@@ -140,11 +164,15 @@ def run_batch(
     unit,
     mask_low, mask_high,
     cbar_min, cbar_max,
-    az_min, az_max,
+    azimuth_regions,
     error_model,
     q_range_min, q_range_max,
     colorscale,
     log_scale,
+    gi_incident_angle_deg, gi_tilt_angle_deg, gi_sample_orientation, gi_npt_ip, gi_npt_oop,
+    gi_display_qxy_min, gi_display_qxy_max, gi_display_qz_min, gi_display_qz_max,
+    gi_azimuth_regions, gi_vert_regions, gi_horiz_regions,
+    gi_qrange_min, gi_qrange_max,
 ):
     if not selected_files or not folder_path or not output_folder:
         return 0, "", "Select files, an input folder, and an output folder first.", ""
@@ -168,11 +196,12 @@ def run_batch(
         rot3=np.deg2rad(float(rot3_deg or 0)),
     )
 
-    az_range = None
-    if az_min is not None and az_max is not None:
-        az_range = (float(az_min), float(az_max))
-
     is_log = bool(log_scale and "log" in log_scale)
+    is_gisaxs = integrator_mode == "gisaxs"
+
+    gi_incident_angle_rad = np.deg2rad(float(gi_incident_angle_deg or 0))
+    gi_tilt_angle_rad = np.deg2rad(float(gi_tilt_angle_deg or 0))
+    gi_sample_orientation = int(gi_sample_orientation or 1)
 
     total = len(selected_files)
     log_lines = []
@@ -182,25 +211,56 @@ def run_batch(
         file_path = os.path.join(folder_path, fname)
         try:
             if mode == "2d":
-                out_path = process_file_2d_png(
-                    file_path, ai,
-                    n_points=int(n_pts or 500),
-                    mask_low=mask_low, mask_high=mask_high,
-                    cbar_min=cbar_min, cbar_max=cbar_max,
-                    colorscale=colorscale, log_scale=is_log,
-                    output_dir=output_folder,
-                )
+                if is_gisaxs:
+                    out_path = process_file_2d_gi_png(
+                        file_path, ai,
+                        sample_orientation=gi_sample_orientation,
+                        incident_angle_rad=gi_incident_angle_rad,
+                        tilt_angle_rad=gi_tilt_angle_rad,
+                        n_ip=int(gi_npt_ip or 500), n_oop=int(gi_npt_oop or 500),
+                        mask_low=mask_low, mask_high=mask_high,
+                        cbar_min=cbar_min, cbar_max=cbar_max,
+                        display_qxy_min=gi_display_qxy_min, display_qxy_max=gi_display_qxy_max,
+                        display_qz_min=gi_display_qz_min, display_qz_max=gi_display_qz_max,
+                        colorscale=colorscale, log_scale=is_log,
+                        output_dir=output_folder,
+                    )
+                else:
+                    out_path = process_file_2d_png(
+                        file_path, ai,
+                        n_points=int(n_pts or 500),
+                        mask_low=mask_low, mask_high=mask_high,
+                        cbar_min=cbar_min, cbar_max=cbar_max,
+                        colorscale=colorscale, log_scale=is_log,
+                        output_dir=output_folder,
+                    )
             else:
-                out_path = process_file_1d(
-                    file_path, ai,
-                    n_points=int(n_pts or 1000),
-                    unit=unit or "q_A^-1",
-                    mask_low=mask_low, mask_high=mask_high,
-                    azimuth_range=az_range,
-                    error_model=error_model or None,
-                    q_min=q_range_min, q_max=q_range_max,
-                    output_dir=output_folder,
-                )
+                if is_gisaxs:
+                    out_path = process_file_1d_gi_csv(
+                        file_path, ai,
+                        sample_orientation=gi_sample_orientation,
+                        incident_angle_rad=gi_incident_angle_rad,
+                        tilt_angle_rad=gi_tilt_angle_rad,
+                        n_ip=int(gi_npt_ip or 500), n_oop=int(gi_npt_oop or 500),
+                        n_points_1d=int(n_pts or 1000),
+                        mask_low=mask_low, mask_high=mask_high,
+                        azimuth_regions=gi_azimuth_regions,
+                        vert_regions=gi_vert_regions,
+                        horiz_regions=gi_horiz_regions,
+                        q_min=gi_qrange_min, q_max=gi_qrange_max,
+                        output_dir=output_folder,
+                    )
+                else:
+                    out_path = process_file_1d(
+                        file_path, ai,
+                        n_points=int(n_pts or 1000),
+                        unit=unit or "q_A^-1",
+                        mask_low=mask_low, mask_high=mask_high,
+                        azimuth_regions=azimuth_regions,
+                        error_model=error_model or None,
+                        q_min=q_range_min, q_max=q_range_max,
+                        output_dir=output_folder,
+                    )
             log_lines.append(f"✔ {fname} → {os.path.basename(out_path)}")
         except Exception as exc:
             log_lines.append(f"✘ {fname}: {exc}")

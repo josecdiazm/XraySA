@@ -90,6 +90,28 @@ def layout():
                         ),
 
                         _section(
+                            "🔬 Integrator",
+                            dbc.RadioItems(
+                                id="batch-integrator-mode",
+                                options=[
+                                    {"label": "Scattering 2D & 1D (azimuthal integrator)",
+                                     "value": "scattering"},
+                                    {"label": "Grazing Incidence (fiber integrator)",
+                                     "value": "gisaxs"},
+                                ],
+                                value="scattering",
+                            ),
+                            html.Div(
+                                "Chooses which tab's geometry/regions drive processing: base "
+                                "detector geometry always comes from Scattering 2D & 1D; "
+                                "Grazing Incidence additionally uses its incident/tilt angle, "
+                                "sample orientation, display range, and azimuthal/vertical/"
+                                "horizontal regions.",
+                                style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "6px"},
+                            ),
+                        ),
+
+                        _section(
                             "⚙️ Processing mode",
                             dbc.RadioItems(
                                 id="batch-mode",
