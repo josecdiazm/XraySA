@@ -88,6 +88,35 @@ def _preview_section():
     )
 
 
+def _qrange_section():
+    return _section(
+        "🔍 Q Range",
+        html.Div(
+            "Trims both the 1-D profile and the energy-series overlay — "
+            "display only, no re-integration needed.",
+            style={"fontSize": "0.78rem", "color": "#6c757d", "marginBottom": "8px"},
+        ),
+        html.Div([
+            _label("Q min"),
+            dcc.Input(
+                id="reson-qrange-min", type="number", value=None, step="0.001",
+                style=_INPUT_STYLE,
+            ),
+        ], style=_ROW_STYLE),
+        html.Div([
+            _label("Q max"),
+            dcc.Input(
+                id="reson-qrange-max", type="number", value=None, step="0.001",
+                style=_INPUT_STYLE,
+            ),
+        ], style=_ROW_STYLE),
+        dbc.Button(
+            "Apply Q Range", id="reson-qrange-apply-btn",
+            color="primary", size="sm", className="w-100",
+        ),
+    )
+
+
 def _roi_section():
     return _section(
         "🎯 ROI regions (for NEXAFS)",
@@ -193,6 +222,8 @@ def layout():
             dcc.Store(id="reson-roi-store", data=[]),
             dcc.Store(id="reson-nexafs-store", data={}),
             dcc.Store(id="reson-energy-store", data={}),
+            dcc.Store(id="reson-1d-data-store", data={}),
+            dcc.Store(id="reson-qrange-store", data=None),
 
             html.H4(
                 "Resonant Scattering",
@@ -207,6 +238,7 @@ def layout():
                     [
                         _folder_section(),
                         _preview_section(),
+                        _qrange_section(),
                         _roi_section(),
                         _nexafs_section(),
                         _energy_series_section(),

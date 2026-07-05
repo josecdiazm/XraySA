@@ -199,13 +199,13 @@ def render_2d_pixel(file_idx, entries, roi_regions, colorscale, log_scale, mask_
             type="rect",
             x0=roi["col_min"], x1=roi["col_max"],
             y0=roi["row_min"], y1=roi["row_max"],
-            line=dict(color=color, width=1.5),
+            line=dict(color=color, width=2.5),
         )
         fig.add_annotation(
             x=roi["col_min"], y=roi["row_min"],
             text=roi.get("name", f"ROI {i+1}"),
             showarrow=False, xanchor="left", yanchor="bottom",
-            font=dict(color=color, size=11),
+            font=dict(color=color, size=17),
             bgcolor="rgba(0,0,0,0.5)",
         )
 
@@ -232,7 +232,7 @@ def render_2d_pixel(file_idx, entries, roi_regions, colorscale, log_scale, mask_
 
 @callback(
     Output("reson-2d-q-graph", "figure"),
-    Output("reson-1d-graph", "figure"),
+    Output("reson-1d-data-store", "data"),
     Input("reson-integrate-btn", "n_clicks"),
     State("reson-file-select", "value"),
     State("reson-file-store", "data"),
@@ -254,8 +254,6 @@ def render_2d_pixel(file_idx, entries, roi_regions, colorscale, log_scale, mask_
     State("scat-cbar-max", "value"),
     State("scat-colorscale-dropdown", "value"),
     State("scat-log-toggle", "value"),
-    State("scat-log-y-toggle", "value"),
-    State("scat-log-x-toggle", "value"),
     State("scat-show-beam-centre", "value"),
     State("scat-azimuth-regions-store", "data"),
     prevent_initial_call=True,
@@ -265,7 +263,7 @@ def run_reson_integration(
     distance_mm, bcx, bcy, px_x_um, px_y_um, rot1_deg, rot2_deg, rot3_deg,
     n_pts, unit,
     mask_low, mask_high, pixel_mask_regions,
-    cbar_min, cbar_max, colorscale, log_scale, log_y, log_x, show_beam_centre,
+    cbar_min, cbar_max, colorscale, log_scale, show_beam_centre,
     azimuth_regions,
 ):
     if not n_clicks or file_idx is None or not entries or not folder_path:
@@ -277,8 +275,7 @@ def run_reson_integration(
     try:
         arr = load_image_from_disk(os.path.join(folder_path, entry["filename"]))
     except Exception as exc:
-        empty = error_figure(f"Error loading file: {exc}")
-        return empty, empty
+        return error_figure(f"Error loading file: {exc}"), {}
 
     try:
         ai = build_integrator(
@@ -295,8 +292,7 @@ def run_reson_integration(
         wl_A = energy_to_wavelength(energy_eV / 1000.0)
         ai.wavelength = wl_A * 1e-10
     except Exception as exc:
-        empty = error_figure(f"Integrator error: {exc}")
-        return empty, empty
+        return error_figure(f"Integrator error: {exc}"), {}
 
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
     mask |= build_pixel_mask(arr.shape, pixel_mask_regions)
@@ -305,8 +301,7 @@ def run_reson_integration(
     try:
         I_qxy, qx, qy = integrate_2d_qxy(arr, ai, n_points=int(n_pts or 500), mask=mask)
     except Exception as exc:
-        empty = error_figure(f"qx/qy error: {exc}")
-        return empty, empty
+        return error_figure(f"qx/qy error: {exc}"), {}
 
     display_qxy = I_qxy.copy()
     if mask_low is not None or mask_high is not None:
@@ -389,7 +384,10 @@ def run_reson_integration(
         ))
 
     # ── 1-D profile — one curve per azimuthal region, or one unrestricted
-    #    integration when none are defined, mirroring Scattering 2D & 1D ────
+    #    integration when none are defined, mirroring Scattering 2D & 1D. Only
+    #    curves are stored here; render_reson_1d_plot below turns them into
+    #    the actual figure, so a Q Range trim can re-filter and redraw
+    #    without re-running any of this.
     curves = []
     if azimuth_regions:
         for i, region in enumerate(azimuth_regions):
@@ -401,7 +399,7 @@ def run_reson_integration(
                 azimuth_range=(region["az_min"], region["az_max"]),
             )
             curves.append({
-                "q": q, "I": I,
+                "q": q.tolist(), "I": I.tolist(),
                 "name": f"Azimuthal [{region['az_min']:.1f}°, {region['az_max']:.1f}°]",
                 "color": azimuth_color(i),
             })
@@ -413,12 +411,42 @@ def run_reson_integration(
             mask=mask,
             azimuth_range=None,
         )
-        curves.append({"q": q, "I": I, "name": "I(q)", "color": "#1f77b4"})
+        curves.append({"q": q.tolist(), "I": I.tolist(), "name": "I(q)", "color": "#1f77b4"})
+
+    return fig_qxy, {"curves": curves, "unit": unit}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4.5.  Render the 1-D profile from stored curves, applying the Q Range trim
+#       live — no re-integration needed, mirrors update_1d_plot in
+#       callbacks_scattering_2d.py.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("reson-1d-graph", "figure"),
+    Input("reson-1d-data-store", "data"),
+    Input("reson-qrange-store", "data"),
+    Input("scat-log-y-toggle", "value"),
+    Input("scat-log-x-toggle", "value"),
+    prevent_initial_call=True,
+)
+def render_reson_1d_plot(store_data, q_range, log_y, log_x):
+    if not store_data or not store_data.get("curves"):
+        raise PreventUpdate
+
+    unit = store_data.get("unit", "q_A^-1")
+    q_min = q_range.get("q_min") if q_range else None
+    q_max = q_range.get("q_max") if q_range else None
 
     fig1d = go.Figure()
-    for curve in curves:
+    for curve in store_data["curves"]:
+        q = np.array(curve["q"])
+        I = np.array(curve["I"])
+        if q_min is not None and q_max is not None:
+            keep = (q >= q_min) & (q <= q_max)
+            q, I = q[keep], I[keep]
         fig1d.add_trace(go.Scatter(
-            x=curve["q"], y=curve["I"],
+            x=q, y=I,
             mode="lines",
             name=curve["name"],
             line=dict(width=2.0, color=curve["color"]),
@@ -453,8 +481,20 @@ def run_reson_integration(
             minor=dict(ticks="outside"),
         ),
     )
+    return fig1d
 
-    return fig_qxy, fig1d
+
+@callback(
+    Output("reson-qrange-store", "data", allow_duplicate=True),
+    Input("reson-qrange-apply-btn", "n_clicks"),
+    State("reson-qrange-min", "value"),
+    State("reson-qrange-max", "value"),
+    prevent_initial_call=True,
+)
+def apply_reson_qrange(n_clicks, q_min, q_max):
+    if q_min is None or q_max is None:
+        raise PreventUpdate
+    return {"q_min": q_min, "q_max": q_max}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -767,10 +807,11 @@ def run_energy_series(
 @callback(
     Output("reson-energy-graph", "figure"),
     Input("reson-energy-store", "data"),
+    Input("reson-qrange-store", "data"),
     Input("scat-log-y-toggle", "value"),
     Input("scat-log-x-toggle", "value"),
 )
-def render_energy_series_plot(store_data, log_y, log_x):
+def render_energy_series_plot(store_data, q_range, log_y, log_x):
     if not store_data or not store_data.get("curves"):
         raise PreventUpdate
 
@@ -779,13 +820,20 @@ def render_energy_series_plot(store_data, log_y, log_x):
     energies = np.array([c["energy"] for c in curves])
     e_min, e_max = float(energies.min()), float(energies.max())
 
+    q_min = q_range.get("q_min") if q_range else None
+    q_max = q_range.get("q_max") if q_range else None
+
     fig = go.Figure()
     for c in curves:
         e = c["energy"]
         t = 0.0 if e_max == e_min else (e - e_min) / (e_max - e_min)
         color = sample_colorscale("Viridis", [t])[0]
+        q_arr, I_arr = np.array(c["q"]), np.array(c["I"])
+        if q_min is not None and q_max is not None:
+            keep = (q_arr >= q_min) & (q_arr <= q_max)
+            q_arr, I_arr = q_arr[keep], I_arr[keep]
         fig.add_trace(go.Scatter(
-            x=c["q"], y=c["I"],
+            x=q_arr, y=I_arr,
             mode="lines",
             line=dict(width=1.2, color=color),
             showlegend=False,
