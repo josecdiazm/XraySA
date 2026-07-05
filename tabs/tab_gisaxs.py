@@ -81,12 +81,6 @@ def _gi_geometry_section():
 def _gi_display_range_section():
     return _section(
         "🖼️ 2-D display range",
-        html.Div(
-            "Sets the qxy/qz plot axis limits (like matplotlib's set_xlim/"
-            "set_ylim) — display only, doesn't affect any integration. "
-            "Leave a field blank to use the full computed extent.",
-            style={"fontSize": "0.78rem", "color": "#6c757d", "marginBottom": "8px"},
-        ),
 
         html.Div([
             _label("qxy min (Å⁻¹)"),
