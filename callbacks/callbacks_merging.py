@@ -35,7 +35,11 @@ _UNIT_LABELS = {
 
 
 def _log_axes_layout(unit: str, **extra) -> dict:
-    """Shared log-log axis layout with a proper q-unit label."""
+    """
+    Shared log-log axis layout with a proper q-unit label, matching the
+    tick/exponent styling used everywhere else in the app (major + minor
+    ticks, power-of-ten scientific notation).
+    """
     layout = dict(
         xaxis_title=_UNIT_LABELS.get(unit, unit),
         yaxis_title="Intensity",
@@ -43,6 +47,16 @@ def _log_axes_layout(unit: str, **extra) -> dict:
         yaxis_type="log",
         margin=dict(l=10, r=10, t=20, b=10),
         plot_bgcolor="white", paper_bgcolor="white",
+        xaxis=dict(
+            showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True,
+            ticks="outside", exponentformat="power", showexponent="all",
+            minor=dict(ticks="outside"),
+        ),
+        yaxis=dict(
+            showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True,
+            ticks="outside", exponentformat="power", showexponent="all",
+            minor=dict(ticks="outside"),
+        ),
     )
     layout.update(extra)
     return layout
