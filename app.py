@@ -43,7 +43,7 @@ app.layout = dbc.Container(
         dbc.Row(
             dbc.Col(
                 html.H2(
-                    "X-Ray Spectroscopy & Scattering Tools",
+                    "X-Ray Scattering Analysis Tools",
                     className="text-center my-3"
                 )
             )

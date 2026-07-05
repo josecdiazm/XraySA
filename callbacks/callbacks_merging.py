@@ -6,6 +6,9 @@ separate Merge panel that loads two previously-saved averaged files.
 
 from __future__ import annotations
 import os
+import base64
+import shutil
+import tempfile
 import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, State, callback, ctx, no_update
@@ -62,6 +65,31 @@ def _log_axes_layout(unit: str, **extra) -> dict:
     return layout
 
 
+def _stage_dropped_files(contents_list, filenames_list, prev_tempdir):
+    """
+    Decode dropped-file contents into a fresh temp folder (removing the
+    previous one first, if any, so a session doesn't accumulate one temp
+    dir per drop), returning that folder's path. Callers point their
+    existing folder-path pipeline at it, same trick as Batch SWAXS's
+    drag-and-drop.
+    """
+    if prev_tempdir and os.path.isdir(prev_tempdir):
+        shutil.rmtree(prev_tempdir, ignore_errors=True)
+
+    tempdir = tempfile.mkdtemp(prefix="xraysa_merge_upload_")
+
+    for contents, filename in zip(contents_list, filenames_list):
+        try:
+            _header, b64data = contents.split(",", 1)
+            raw = base64.b64decode(b64data)
+            with open(os.path.join(tempdir, filename), "wb") as fh:
+                fh.write(raw)
+        except Exception:
+            continue
+
+    return tempdir
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Average panel: load folder → select files → average → save
 # ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +111,29 @@ def load_avg_folder(n_clicks, folder_path):
     if not files:
         return [], f"No CSV/TXT files found in '{folder_path}'."
     return files, f"✔ Found {len(files)} file(s)."
+
+
+@callback(
+    Output("merge-avg-all-files", "data", allow_duplicate=True),
+    Output("merge-avg-folder-input", "value", allow_duplicate=True),
+    Output("merge-avg-folder-status", "children", allow_duplicate=True),
+    Output("merge-avg-upload-tempdir-store", "data"),
+    Input("merge-avg-upload-files", "contents"),
+    State("merge-avg-upload-files", "filename"),
+    State("merge-avg-upload-tempdir-store", "data"),
+    prevent_initial_call=True,
+)
+def handle_avg_dropped_files(contents_list, filenames_list, prev_tempdir):
+    if not contents_list or not filenames_list:
+        raise PreventUpdate
+
+    tempdir = _stage_dropped_files(contents_list, filenames_list, prev_tempdir)
+    files = list_csv_files(tempdir)
+    if not files:
+        return no_update, tempdir, "✘ None of the dropped files were a supported CSV/TXT profile.", tempdir
+
+    status = f"✔ Received {len(files)} dropped file(s) — staged in a temporary folder for this session."
+    return files, tempdir, status, tempdir
 
 
 @callback(
@@ -219,6 +270,32 @@ def load_files_folder(n_clicks, folder_path):
 
     options = [{"label": f, "value": f} for f in files]
     return files, f"✔ Found {len(files)} file(s).", options, options
+
+
+@callback(
+    Output("merge-files-all", "data", allow_duplicate=True),
+    Output("merge-files-folder-input", "value", allow_duplicate=True),
+    Output("merge-files-folder-status", "children", allow_duplicate=True),
+    Output("merge-saxs-select", "options", allow_duplicate=True),
+    Output("merge-waxs-select", "options", allow_duplicate=True),
+    Output("merge-files-upload-tempdir-store", "data"),
+    Input("merge-files-upload-files", "contents"),
+    State("merge-files-upload-files", "filename"),
+    State("merge-files-upload-tempdir-store", "data"),
+    prevent_initial_call=True,
+)
+def handle_files_dropped_files(contents_list, filenames_list, prev_tempdir):
+    if not contents_list or not filenames_list:
+        raise PreventUpdate
+
+    tempdir = _stage_dropped_files(contents_list, filenames_list, prev_tempdir)
+    files = list_csv_files(tempdir)
+    if not files:
+        return no_update, tempdir, "✘ None of the dropped files were a supported CSV/TXT profile.", no_update, no_update, tempdir
+
+    options = [{"label": f, "value": f} for f in files]
+    status = f"✔ Received {len(files)} dropped file(s) — staged in a temporary folder for this session."
+    return files, tempdir, status, options, options, tempdir
 
 
 @callback(

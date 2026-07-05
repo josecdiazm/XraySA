@@ -33,6 +33,7 @@ def _average_panel():
 
         dcc.Store(id="merge-avg-all-files", data=[]),
         dcc.Store(id="merge-avg-store"),
+        dcc.Store(id="merge-avg-upload-tempdir-store", data=None),
 
         folder_picker("merge-avg-folder-input"),
         dbc.Button(
@@ -41,6 +42,21 @@ def _average_panel():
         ),
         html.Div(id="merge-avg-folder-status",
                  style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
+
+        dcc.Upload(
+            id="merge-avg-upload-files",
+            children=html.Div(
+                ["Or drag & drop files here, or ", html.A("select files")],
+                style={"textAlign": "center", "padding": "14px", "color": "#6c757d"},
+            ),
+            style={
+                "border": "2px dashed #ced4da",
+                "borderRadius": "6px",
+                "cursor": "pointer",
+                "marginTop": "8px",
+            },
+            multiple=True,
+        ),
 
         html.Div("Exclude files containing:",
                  style={"fontSize": "0.8rem", "color": "#6c757d", "marginTop": "10px"}),
@@ -99,6 +115,7 @@ def _merge_panel():
         dcc.Store(id="merge-saxs-avg-store"),
         dcc.Store(id="merge-waxs-avg-store"),
         dcc.Store(id="merge-merged-store"),
+        dcc.Store(id="merge-files-upload-tempdir-store", data=None),
 
         folder_picker("merge-files-folder-input", "/path/to/averaged files"),
         dbc.Button(
@@ -107,6 +124,21 @@ def _merge_panel():
         ),
         html.Div(id="merge-files-folder-status",
                  style={"fontSize": "0.85rem", "color": "#495057", "marginTop": "8px"}),
+
+        dcc.Upload(
+            id="merge-files-upload-files",
+            children=html.Div(
+                ["Or drag & drop files here, or ", html.A("select files")],
+                style={"textAlign": "center", "padding": "14px", "color": "#6c757d"},
+            ),
+            style={
+                "border": "2px dashed #ced4da",
+                "borderRadius": "6px",
+                "cursor": "pointer",
+                "marginTop": "8px",
+            },
+            multiple=True,
+        ),
 
         dbc.Row([
             dbc.Col([
