@@ -16,7 +16,10 @@ import xraydb
 from tabs.tab_ptable import (
     periodic_table,
     element_names,
-    get_tile_color,
+    get_tile_colors,
+    shell_headroom_details,
+    l_edge_gaps,
+    headroom_to_k,
 )
 from utils.notes_store import load_notes, add_note
 
@@ -86,25 +89,39 @@ def update_grid_colors(emin, emax, store_data):
                     })
                 )
             else:
-                bg = get_tile_color(sym, emin, emax)
+                bg, badge = get_tile_colors(sym, emin, emax)
                 border = "2.5px solid #2d6a4f" if sym == selected else "1.5px solid #888"
                 cells.append(
-                    html.Button(
-                        sym,
-                        id={"type": "element-btn", "index": sym},
-                        n_clicks=0,
-                        style={
-                            "flex": "1", "aspectRatio": "1",
-                            "margin": "1px", "padding": "0",
-                            "fontWeight": "bold",
-                            "fontSize": "clamp(10px, 1.1vw, 18px)",
-                            "border": border,
-                            "borderRadius": "5px",
-                            "cursor": "pointer",
-                            "backgroundColor": bg,
-                            "color": "#111",
-                        }
-                    )
+                    html.Div([
+                        html.Button(
+                            sym,
+                            id={"type": "element-btn", "index": sym},
+                            n_clicks=0,
+                            style={
+                                "width": "100%", "height": "100%",
+                                "margin": "0", "padding": "0",
+                                "fontWeight": "bold",
+                                "fontSize": "clamp(10px, 1.1vw, 18px)",
+                                "border": border,
+                                "borderRadius": "5px",
+                                "cursor": "pointer",
+                                "backgroundColor": bg,
+                                "color": "#111",
+                            }
+                        ),
+                        # Reference swatch (the shell's pure legend color) as a
+                        # folded-corner bookmark, so it can be compared against
+                        # the tile's gradient shade.
+                        html.Div(style={
+                            "position": "absolute", "top": "3px", "right": "3px",
+                            "width": "0", "height": "0",
+                            "borderStyle": "solid",
+                            "borderWidth": "0 13px 13px 0",
+                            "borderColor": f"transparent {badge} transparent transparent",
+                            "pointerEvents": "none",
+                        }),
+                    ], style={"flex": "1", "aspectRatio": "1", "margin": "1px",
+                              "position": "relative"})
                 )
         rows.append(
             html.Div(cells, style={"display": "flex", "flexWrap": "nowrap",
@@ -201,7 +218,55 @@ def update_detail_panel(store_data):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4.  Render + add per-element notes (persisted to data/ptable_notes.json)
+# 4.  Populate the K/L/M headroom panel
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("pt-headroom-panel", "children"),
+    Input("ptable-store", "data"),
+    Input("pt-emin", "value"),
+    Input("pt-emax", "value"),
+)
+def update_headroom_panel(store_data, emin, emax):
+    symbol = (store_data or {}).get("selected")
+    if not symbol:
+        return html.Div("Click an element to see headroom details.",
+                         style={"color": "#888", "fontSize": "13px"})
+
+    emin = emin if emin is not None else 0
+    emax = emax if emax is not None else 100000
+
+    status_text = {"above": "not in range", "below": "below range", "none": "no edge data"}
+
+    rows = []
+    for shell, status, headroom, k in shell_headroom_details(symbol, emin, emax):
+        if status == "ok":
+            text = f"{shell}: {headroom:.0f} eV headroom (k = {k:.2f} Å⁻¹)"
+        else:
+            text = f"{shell}: {status_text[status]}"
+        rows.append(html.Div(text, style={"fontSize": "13px", "color": "#555",
+                                           "padding": "2px 0"}))
+
+        # Already passed every L-edge at this range ("below") -- nothing
+        # actionable, so skip the breakdown; show it for every other status.
+        if shell == "L" and status != "below":
+            for name, energy, next_name, gap in l_edge_gaps(symbol):
+                if gap is None:
+                    sub_text = f"{name}: {energy:.0f} eV — no higher edge"
+                else:
+                    gap_k = headroom_to_k(gap)
+                    sub_text = (f"{name}: {energy:.0f} eV — {gap:.0f} eV to {next_name} "
+                                f"(k = {gap_k:.2f} Å⁻¹)")
+                rows.append(html.Div(sub_text, style={
+                    "fontSize": "12px", "color": "#888",
+                    "padding": "1px 0 1px 14px",
+                }))
+
+    return html.Div(rows)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5.  Render + add per-element notes (persisted to data/ptable_notes.json)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_notes(symbol):

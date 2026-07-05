@@ -1,4 +1,6 @@
 
+import math
+
 import dash
 from dash import html, dcc
 import dash_bootstrap_components as dbc
@@ -99,34 +101,123 @@ def shell_gradient_color(shell, headroom_ev, light_frac=0.85):
     return _rgb_to_hex(rgb)
 
 
-def _shell_headroom(edges, shell, e_min, e_max):
-    best = None
+def _shell_status(edges, shell, e_min, e_max):
+    """Classify a shell relative to [e_min, e_max]:
+    - ("ok", edge_name, headroom): an edge is reachable, with its headroom (eV)
+    - ("above", None, None): every edge in the shell is above e_max (not
+      reached yet at this range)
+    - ("below", None, None): every edge in the shell is below e_min
+      (already passed)
+    - ("none", None, None): the element has no edges for this shell at all
+    """
+    energies = []
     for name in SHELL_EDGES[shell]:
         edge = edges.get(name)
         energy = getattr(edge, "energy", None) if edge else None
-        if energy is None or not (e_min <= energy <= e_max):
-            continue
-        headroom = e_max - energy
-        if best is None or headroom > best:
-            best = headroom
-    return best
+        if energy is not None:
+            energies.append((name, energy))
+
+    if not energies:
+        return "none", None, None
+
+    best_name, best_headroom = None, None
+    for name, energy in energies:
+        if e_min <= energy <= e_max:
+            headroom = e_max - energy
+            if best_headroom is None or headroom > best_headroom:
+                best_headroom = headroom
+                best_name = name
+    if best_headroom is not None:
+        return "ok", best_name, best_headroom
+
+    if min(e for _, e in energies) > e_max:
+        return "above", None, None
+    if max(e for _, e in energies) < e_min:
+        return "below", None, None
+    return "above", None, None   # straddles the range without landing inside it
 
 
-def get_tile_color(symbol, e_min, e_max):
+def get_tile_colors(symbol, e_min, e_max):
+    """Return (background_color, badge_color) for a tile: background is the
+    shell's gradient shade, badge is that shell's pure legend color, so the
+    two can be compared side by side. Both are white when unreachable."""
     sym = symbol.replace("*", "")
     if not sym:
-        return "#f0f0f0"
+        return "#f0f0f0", "#f0f0f0"
     try:
         edges = xraydb.xray_edges(sym)
     except Exception:
-        return "#ffffff"
+        return "#ffffff", "#ffffff"
 
     for shell in ("K", "L", "M"):
-        headroom = _shell_headroom(edges, shell, e_min, e_max)
-        if headroom is not None and headroom >= HEADROOM_MIN:
-            return shell_gradient_color(shell, headroom)
+        status, _, headroom = _shell_status(edges, shell, e_min, e_max)
+        if status == "ok" and headroom >= HEADROOM_MIN:
+            return shell_gradient_color(shell, headroom), SHELL_COLORS[shell]
 
-    return "#ffffff"              # cannot usefully reach any edge
+    return "#ffffff", "#ffffff"   # cannot usefully reach any edge
+
+
+# ── k-space (scattering vector) conversion ──────────────────────────────────
+# E_kinetic = K_TO_E_PREFACTOR * k^2 (k in Å^-1, E_kinetic in eV), from
+# hbar^2 / (2 m_e) -- the same relation used to plan constant-k EXAFS scans
+# at the beamline, so "headroom" (eV past an edge) doubles as "how far out in
+# k-space" a scan could reach.
+_M_E = 9.10938356e-31                    # electron mass, kg
+_H_BAR = 6.62607015e-34 / (2 * math.pi)  # J*s
+_JOULES_TO_EV = 1.602176634e-19
+K_TO_E_PREFACTOR = (_H_BAR ** 2 / (2 * _M_E)) * (1 / (_JOULES_TO_EV * 1e-20))  # eV per (1/Å)^2
+
+
+def headroom_to_k(headroom_ev):
+    """Convert eV of headroom above an edge into the equivalent
+    photoelectron wavenumber k (Å^-1)."""
+    return (headroom_ev / K_TO_E_PREFACTOR) ** 0.5
+
+
+def shell_headroom_details(symbol, e_min, e_max):
+    """Return [(shell, status, headroom_eV_or_None, k_or_None), ...] for K,
+    L, M -- the full breakdown, independent of which shell "wins" the tile's
+    color, so e.g. an ample M headroom is still visible even when a
+    barely-qualifying L is the one driving the tile's shade. status is "ok"
+    (headroom/k populated), "above" (every edge in the shell is above
+    e_max), "below" (every edge is below e_min), or "none" (the element has
+    no edges for that shell)."""
+    sym = symbol.replace("*", "")
+    try:
+        edges = xraydb.xray_edges(sym)
+    except Exception:
+        edges = {}
+
+    details = []
+    for shell in ("K", "L", "M"):
+        status, _edge_name, headroom = _shell_status(edges, shell, e_min, e_max)
+        k = headroom_to_k(headroom) if headroom is not None else None
+        details.append((shell, status, headroom, k))
+    return details
+
+
+def l_edge_gaps(symbol):
+    """For each L-edge present (L3, L2, L1), return
+    (edge_name, energy, next_edge_name, gap_ev) describing how far it can be
+    scanned before the next real edge up (another L-edge, or K) starts
+    interfering. Unlike shell_headroom_details, this is a fixed property of
+    the element -- independent of any chosen e_min/e_max scan range."""
+    sym = symbol.replace("*", "")
+    try:
+        edges = xraydb.xray_edges(sym)
+    except Exception:
+        edges = {}
+
+    order = ["L3", "L2", "L1", "K"]
+    results = []
+    for name, next_name in zip(order[:-1], order[1:]):
+        edge = edges.get(name)
+        if edge is None:
+            continue
+        next_edge = edges.get(next_name)
+        gap = (next_edge.energy - edge.energy) if next_edge is not None else None
+        results.append((name, edge.energy, next_name, gap))
+    return results
 
 # ── Layout helpers ───────────────────────────────────────────────────────────
 
@@ -257,6 +348,20 @@ layout = dbc.Container(
                                      style={"color": "#888", "fontSize": "13px"})
                         ]),
                         style={"minHeight": "380px"}
+                    ),
+                ], className="mb-3"),
+
+                # Headroom card -- K/L/M eV headroom + equivalent k for the
+                # current energy range, independent of which shell drives
+                # the grid tile's color.
+                dbc.Card([
+                    dbc.CardHeader("Headroom",
+                                   style={"fontWeight": "bold", "fontSize": "15px"}),
+                    dbc.CardBody(
+                        html.Div(id="pt-headroom-panel", children=[
+                            html.Div("Click an element to see headroom details.",
+                                     style={"color": "#888", "fontSize": "13px"})
+                        ]),
                     ),
                 ], className="mb-3"),
 
