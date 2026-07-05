@@ -162,12 +162,16 @@ def layout():
                             "Run Batch", id="batch-run-btn",
                             color="success", className="w-100",
                         ),
+                        dbc.Progress(id="batch-progress", value=0, label="", striped=True,
+                                     animated=True, style={"height": "20px", "marginTop": "10px"}),
+                        html.Div(id="batch-progress-text",
+                                 style={"fontSize": "0.8rem", "color": "#495057", "marginTop": "6px"}),
                     ],
                     width=4,
                     style={"overflowY": "auto", "maxHeight": "92vh", "paddingRight": "8px"},
                 ),
 
-                # ── Right column: files + progress + log ──────────────────
+                # ── Right column: files + log ──────────────────────────────
                 dbc.Col(
                     [
                         html.Div(
@@ -189,16 +193,6 @@ def layout():
                             id="batch-files-card",
                             className="mb-3",
                         ),
-
-                        dbc.Card([
-                            dbc.CardHeader("Progress"),
-                            dbc.CardBody([
-                                dbc.Progress(id="batch-progress", value=0, label="", striped=True,
-                                             animated=True, style={"height": "24px"}),
-                                html.Div(id="batch-progress-text",
-                                         style={"marginTop": "10px", "fontSize": "0.9rem", "color": "#495057"}),
-                            ]),
-                        ], className="mb-3"),
 
                         dbc.Card([
                             dbc.CardHeader("Log"),
