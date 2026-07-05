@@ -158,7 +158,7 @@ def update_detail_panel(store_data):
         edge_items.sort(key=lambda x: (x[1] is None, -(x[1] or 0)))
 
         total = len(edge_items)
-        chunk_size = 10
+        chunk_size = 9
         columns = []
 
         for c_idx, start in enumerate(range(0, total, chunk_size)):

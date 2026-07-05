@@ -55,6 +55,63 @@ for row in periodic_table:
 
 # ── Color logic ──────────────────────────────────────────────────────────────
 
+# Each tile is classified into a shell family (K, L, or M) by priority --
+# whichever of those shells has an edge reachable in [e_min, e_max] first
+# wins, checked in K > L > M order. Within that shell, the tile's shade is a
+# gradient from a pale tint up to the shell's full base color, based on how
+# much headroom (eV) the best edge in that shell has before e_max. Below
+# HEADROOM_MIN there isn't even room for XANES, so the tile falls back to
+# white ("cannot reach").
+HEADROOM_MIN = 100   # eV — bare minimum margin past an edge to be useful (XANES)
+HEADROOM_MAX = 500   # eV — margin considered ample (full EXAFS)
+
+SHELL_EDGES = {
+    "K": ["K"],
+    "L": ["L1", "L2", "L3"],
+    "M": ["M1", "M2", "M3", "M4", "M5"],
+}
+
+SHELL_COLORS = {
+    "K": "#3fbf8a",   # mediumaquamarine (green)
+    "L": "#87ceeb",   # skyblue (blue)
+    "M": "#f5deb3",   # wheat (yellow)
+}
+
+
+def _hex_to_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _rgb_to_hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(*(max(0, min(255, round(c))) for c in rgb))
+
+
+def shell_gradient_color(shell, headroom_ev, light_frac=0.85):
+    """Interpolate from a pale tint of the shell's base color (at
+    HEADROOM_MIN) up to the full base color (at HEADROOM_MAX)."""
+    frac = (headroom_ev - HEADROOM_MIN) / (HEADROOM_MAX - HEADROOM_MIN)
+    frac = max(0.0, min(1.0, frac))
+    white = (255, 255, 255)
+    base = _hex_to_rgb(SHELL_COLORS[shell])
+    t = light_frac * (1 - frac)   # weight of white in the blend
+    rgb = tuple(w * t + b * (1 - t) for w, b in zip(white, base))
+    return _rgb_to_hex(rgb)
+
+
+def _shell_headroom(edges, shell, e_min, e_max):
+    best = None
+    for name in SHELL_EDGES[shell]:
+        edge = edges.get(name)
+        energy = getattr(edge, "energy", None) if edge else None
+        if energy is None or not (e_min <= energy <= e_max):
+            continue
+        headroom = e_max - energy
+        if best is None or headroom > best:
+            best = headroom
+    return best
+
+
 def get_tile_color(symbol, e_min, e_max):
     sym = symbol.replace("*", "")
     if not sym:
@@ -63,21 +120,13 @@ def get_tile_color(symbol, e_min, e_max):
         edges = xraydb.xray_edges(sym)
     except Exception:
         return "#ffffff"
-    K  = edges.get("K")
-    L1 = edges.get("L1")
-    L2 = edges.get("L2")
-    L3 = edges.get("L3")
-    if K and e_min <= K.energy <= e_max and (K.energy + 500) <= e_max:
-        return "#3fbf8a"          # mediumaquamarine – K EXAFS
-    if L1 and e_min <= L1.energy <= e_max and (L1.energy + 500) <= e_max:
-        return "#87ceeb"          # skyblue – L1 EXAFS
-    K_X  = K  and e_min <= K.energy  <= e_max and (K.energy  + 150) <= e_max
-    L1_X = L1 and e_min <= L1.energy <= e_max and (L1.energy + 150) <= e_max
-    L2_X = L2 and e_min <= L2.energy <= e_max and (L2.energy + 150) <= e_max
-    L3_X = L3 and e_min <= L3.energy <= e_max and (L3.energy + 150) <= e_max
-    if any([K_X, L1_X, L2_X, L3_X]):
-        return "#f5deb3"          # wheat – XANES
-    return "#ffffff"              # white – cannot reach
+
+    for shell in ("K", "L", "M"):
+        headroom = _shell_headroom(edges, shell, e_min, e_max)
+        if headroom is not None and headroom >= HEADROOM_MIN:
+            return shell_gradient_color(shell, headroom)
+
+    return "#ffffff"              # cannot usefully reach any edge
 
 # ── Layout helpers ───────────────────────────────────────────────────────────
 
@@ -128,10 +177,10 @@ def make_pt_grid():
 
 def make_legend():
     items = [
-        ("#3fbf8a", "K – EXAFS"),
-        ("#87ceeb", "L₁ – EXAFS"),
-        ("#f5deb3", "K, L₁, L₂, L₃ — XANES"),
-        ("#ffffff", "Cannot Reach"),
+        (SHELL_COLORS["K"], "K"),
+        (SHELL_COLORS["L"], "L"),
+        (SHELL_COLORS["M"], "M"),
+        ("#ffffff", "Unreachable"),
     ]
     chips = []
     for color, label in items:
@@ -168,25 +217,26 @@ layout = dbc.Container(
             # ── LEFT COLUMN: controls + legend + periodic table ──────────────
             dbc.Col(width=9, children=[
 
-                # Energy range controls
+                # Energy range controls + color legend
                 dbc.Card(dbc.CardBody([
                     html.Div([
-                        html.Span("Energy Range (eV)",
-                                  style={"fontWeight": "bold", "marginRight": "20px",
-                                         "fontSize": "14px"}),
-                        html.Span("Min:", style={"marginRight": "5px"}),
-                        dcc.Input(id="pt-emin", type="number", value=2100,
-                                  min=0, max=100000, step=10,
-                                  style={"width": "90px", "marginRight": "20px"}),
-                        html.Span("Max:", style={"marginRight": "5px"}),
-                        dcc.Input(id="pt-emax", type="number", value=5500,
-                                  min=0, max=100000, step=10,
-                                  style={"width": "90px"}),
-                    ], style={"display": "flex", "alignItems": "center"}),
+                        html.Div([
+                            html.Span("Energy Range (eV)",
+                                      style={"fontWeight": "bold", "marginRight": "20px",
+                                             "fontSize": "14px"}),
+                            html.Span("Min:", style={"marginRight": "5px"}),
+                            dcc.Input(id="pt-emin", type="number", value=2100,
+                                      min=0, max=100000, step=10,
+                                      style={"width": "90px", "marginRight": "20px"}),
+                            html.Span("Max:", style={"marginRight": "5px"}),
+                            dcc.Input(id="pt-emax", type="number", value=5500,
+                                      min=0, max=100000, step=10,
+                                      style={"width": "90px"}),
+                        ], style={"display": "flex", "alignItems": "center"}),
+                        make_legend(),
+                    ], style={"display": "flex", "alignItems": "center",
+                              "justifyContent": "space-between", "flexWrap": "wrap"}),
                 ]), className="mb-2 py-1"),
-
-                # Color legend
-                dbc.Card(dbc.CardBody(make_legend()), className="mb-2 py-1"),
 
                 # Periodic table grid
                 dbc.Card(dbc.CardBody(
