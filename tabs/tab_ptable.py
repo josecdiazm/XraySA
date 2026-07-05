@@ -46,11 +46,6 @@ element_names = {
     'Lv':'Livermorium','Ts':'Tennessine','Og':'Oganesson',
 }
 
-element_notes = {
-    "Cl": "Cannot do EXAFS well due to abundance of Ar in all environments, "
-          "especially when using PFY or TFY.",
-}
-
 # Flat list of all real element symbols in grid order (used for button IDs)
 all_symbols = []
 for row in periodic_table:
@@ -219,12 +214,19 @@ layout = dbc.Container(
                 dbc.Card([
                     dbc.CardHeader("Notes",
                                    style={"fontWeight": "bold", "fontSize": "15px"}),
-                    dbc.CardBody(
+                    dbc.CardBody([
                         html.Div(id="pt-notes-panel", children=[
                             html.Div("", style={"color": "#666", "fontSize": "13px"})
                         ]),
-                        style={"minHeight": "120px"}
-                    ),
+                        dcc.Textarea(
+                            id="pt-notes-input",
+                            placeholder="Add a note for this element...",
+                            style={"width": "100%", "height": "60px",
+                                   "fontSize": "13px", "marginTop": "10px"},
+                        ),
+                        dbc.Button("Add Note", id="pt-notes-add-btn", size="sm",
+                                   color="primary", className="mt-1", n_clicks=0),
+                    ], style={"minHeight": "120px"}),
                 ]),
 
             ]),

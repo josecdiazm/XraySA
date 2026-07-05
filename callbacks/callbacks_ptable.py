@@ -16,9 +16,9 @@ import xraydb
 from tabs.tab_ptable import (
     periodic_table,
     element_names,
-    element_notes,
     get_tile_color,
 )
+from utils.notes_store import load_notes, add_note
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,21 +114,17 @@ def update_grid_colors(emin, emax, store_data):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  Populate the element detail panel + notes panel
+# 3.  Populate the element detail panel
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
     Output("pt-detail-panel", "children"),
-    Output("pt-notes-panel", "children"),
     Input("ptable-store", "data"),
 )
 def update_detail_panel(store_data):
     if not store_data or not store_data.get("selected"):
-        return (
-            html.Div("Click an element to see details.",
-                     style={"color": "#888", "fontSize": "13px"}),
-            html.Div("", style={"color": "#666", "fontSize": "13px"}),
-        )
+        return html.Div("Click an element to see details.",
+                         style={"color": "#888", "fontSize": "13px"})
 
     symbol = store_data["selected"]
     name   = element_names.get(symbol, symbol)
@@ -201,13 +197,44 @@ def update_detail_panel(store_data):
         edges_block = html.Div("No edge data available.",
                                style={"color": "#888", "fontSize": "13px"})
 
-    detail_content = html.Div([header, edges_block])
+    return html.Div([header, edges_block])
 
-    # ── Notes ────────────────────────────────────────────────────────────
-    note_text = element_notes.get(symbol, "")
-    notes_content = html.Div(
-        note_text if note_text else "—",
-        style={"fontSize": "13px", "color": "#555", "lineHeight": "1.5"}
-    )
 
-    return detail_content, notes_content
+# ─────────────────────────────────────────────────────────────────────────────
+# 4.  Render + add per-element notes (persisted to data/ptable_notes.json)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_notes(symbol):
+    if not symbol:
+        return html.Div("", style={"color": "#666", "fontSize": "13px"})
+
+    entries = load_notes().get(symbol, [])
+    if not entries:
+        return html.Div("—", style={"fontSize": "13px", "color": "#555"})
+
+    items = []
+    for entry in reversed(entries):  # newest first
+        items.append(html.Div([
+            html.Div(entry["date"], style={"fontSize": "11px", "color": "#999"}),
+            html.Div(entry["text"], style={"fontSize": "13px", "color": "#555",
+                                            "lineHeight": "1.4"}),
+        ], style={"marginBottom": "8px", "paddingBottom": "8px",
+                  "borderBottom": "1px solid #eee"}))
+    return html.Div(items)
+
+
+@callback(
+    Output("pt-notes-panel", "children"),
+    Output("pt-notes-input", "value"),
+    Input("ptable-store", "data"),
+    Input("pt-notes-add-btn", "n_clicks"),
+    State("pt-notes-input", "value"),
+)
+def update_notes_panel(store_data, n_clicks, note_text):
+    symbol = (store_data or {}).get("selected")
+
+    if ctx.triggered_id == "pt-notes-add-btn" and symbol and note_text and note_text.strip():
+        add_note(symbol, note_text.strip())
+        return render_notes(symbol), ""
+
+    return render_notes(symbol), no_update
