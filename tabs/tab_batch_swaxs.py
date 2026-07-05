@@ -77,15 +77,6 @@ def layout():
                                         },
                                         multiple=True,
                                     ),
-                                    html.Div(
-                                        "Alternative to the folder path above — useful when your "
-                                        "files aren't already on the machine running this app "
-                                        "(e.g. a different computer, or no native folder-browse "
-                                        "support on this OS). Dropped files are staged in a "
-                                        "temporary folder and the path above is filled in "
-                                        "automatically.",
-                                        style={"fontSize": "0.78rem", "color": "#6c757d", "marginTop": "8px"},
-                                    ),
                                 ),
 
                                 _section(
