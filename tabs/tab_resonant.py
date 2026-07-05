@@ -106,11 +106,6 @@ def _preview_section():
 def _qrange_section():
     return _section(
         "🔍 Q Range",
-        html.Div(
-            "Trims both the 1-D profile and the energy-series overlay — "
-            "display only, no re-integration needed.",
-            style={"fontSize": "0.78rem", "color": "#6c757d", "marginBottom": "8px"},
-        ),
         html.Div([
             _label("Q min"),
             dcc.Input(
