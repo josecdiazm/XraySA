@@ -196,27 +196,49 @@ def shell_headroom_details(symbol, e_min, e_max):
     return details
 
 
-def l_edge_gaps(symbol):
-    """For each L-edge present (L3, L2, L1), return
-    (edge_name, energy, next_edge_name, gap_ev) describing how far it can be
-    scanned before the next real edge up (another L-edge, or K) starts
-    interfering. Unlike shell_headroom_details, this is a fixed property of
-    the element -- independent of any chosen e_min/e_max scan range."""
+def l_edge_gaps(symbol, e_min, e_max):
+    """For each L-edge that is itself within [e_min, e_max] (L3, L2, L1 --
+    an edge outside the current range isn't relevant to show at all),
+    return (edge_name, energy, next_label, gap_ev) describing how far it
+    can be scanned before the next constraint -- whichever comes first:
+    the next real edge up, or the top of the current energy range (e_max).
+
+    L1 has no next L/K edge tracked at all (see below), so it always
+    measures to e_max. L3 and L2 normally measure to the next real edge
+    (L2, L1 respectively), *unless* that edge's energy is actually above
+    e_max -- i.e. not reachable within the current range -- in which case
+    they fall back to e_max too, labelled "range end". Without this, a
+    next edge sitting just past e_max would misleadingly report the gap to
+    an edge you can't actually reach in this range.
+
+    L1 specifically never measures to K: K usually sits far enough away
+    that "eV to K" isn't a practically useful number, whereas e_max is the
+    actual ceiling of what's being scanned right now.
+    """
     sym = symbol.replace("*", "")
     try:
         edges = xraydb.xray_edges(sym)
     except Exception:
         edges = {}
 
-    order = ["L3", "L2", "L1", "K"]
+    order = ["L3", "L2", "L1"]
+    next_names = ["L2", "L1", None]
     results = []
-    for name, next_name in zip(order[:-1], order[1:]):
+    for name, next_name in zip(order, next_names):
         edge = edges.get(name)
         if edge is None:
             continue
-        next_edge = edges.get(next_name)
-        gap = (next_edge.energy - edge.energy) if next_edge is not None else None
-        results.append((name, edge.energy, next_name, gap))
+        if e_min is not None and edge.energy < e_min:
+            continue
+        if e_max is not None and edge.energy > e_max:
+            continue
+
+        next_edge = edges.get(next_name) if next_name is not None else None
+        if next_edge is not None and (e_max is None or next_edge.energy <= e_max):
+            results.append((name, edge.energy, next_name, next_edge.energy - edge.energy))
+        else:
+            gap = (e_max - edge.energy) if e_max is not None else None
+            results.append((name, edge.energy, "range end", gap))
     return results
 
 # ── Layout helpers ───────────────────────────────────────────────────────────

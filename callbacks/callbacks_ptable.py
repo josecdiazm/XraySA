@@ -250,7 +250,7 @@ def update_headroom_panel(store_data, emin, emax):
         # Already passed every L-edge at this range ("below") -- nothing
         # actionable, so skip the breakdown; show it for every other status.
         if shell == "L" and status != "below":
-            for name, energy, next_name, gap in l_edge_gaps(symbol):
+            for name, energy, next_name, gap in l_edge_gaps(symbol, emin, emax):
                 if gap is None:
                     sub_text = f"{name}: {energy:.0f} eV — no higher edge"
                 else:
