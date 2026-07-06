@@ -22,6 +22,7 @@ from utils.scattering_utils import (
     apply_threshold_mask,
     build_pixel_mask,
     build_integrator,
+    fit2d_beam_center_to_poni_pixels,
     integrate_1d,
     integrate_2d,
     integrate_2d_qxy,
@@ -276,16 +277,29 @@ def run_integration(
 
     # ── Build integrator ─────────────────────────────────────────────────────
     try:
+        dist_m = float(distance_mm) * 1e-3
+        px_x_m = float(px_x_um) * 1e-6
+        px_y_m = float(px_y_um) * 1e-6
+        rot1_rad = np.deg2rad(float(rot1_deg or 0))
+        rot2_rad = np.deg2rad(float(rot2_deg or 0))
+        rot3_rad = np.deg2rad(float(rot3_deg or 0))
+
+        # bcx/bcy are the Fit2D-style (physical) beam centre; convert to
+        # the PONI point the current tilt implies before building.
+        poni_x, poni_y = fit2d_beam_center_to_poni_pixels(
+            float(bcx), float(bcy), px_x_m, px_y_m, dist_m, rot1_rad, rot2_rad,
+        )
+
         ai = build_integrator(
-            detector_distance_m=float(distance_mm) * 1e-3,
+            detector_distance_m=dist_m,
             wavelength_m=wl_m,
-            beam_center_x=float(bcx),
-            beam_center_y=float(bcy),
-            pixel_size_x=float(px_x_um) * 1e-6,
-            pixel_size_y=float(px_y_um) * 1e-6,
-            rot1=np.deg2rad(float(rot1_deg or 0)),
-            rot2=np.deg2rad(float(rot2_deg or 0)),
-            rot3=np.deg2rad(float(rot3_deg or 0)),
+            beam_center_x=poni_x,
+            beam_center_y=poni_y,
+            pixel_size_x=px_x_m,
+            pixel_size_y=px_y_m,
+            rot1=rot1_rad,
+            rot2=rot2_rad,
+            rot3=rot3_rad,
         )
     except Exception as exc:
         empty = _error_figure(f"Integrator error: {exc}")
@@ -602,16 +616,29 @@ def run_cake(
         wl_A = float(wavelength_A)
 
     try:
+        dist_m = float(distance_mm) * 1e-3
+        px_x_m = float(px_x_um) * 1e-6
+        px_y_m = float(px_y_um) * 1e-6
+        rot1_rad = np.deg2rad(float(rot1_deg or 0))
+        rot2_rad = np.deg2rad(float(rot2_deg or 0))
+        rot3_rad = np.deg2rad(float(rot3_deg or 0))
+
+        # bcx/bcy are the Fit2D-style (physical) beam centre; convert to
+        # the PONI point the current tilt implies before building.
+        poni_x, poni_y = fit2d_beam_center_to_poni_pixels(
+            float(bcx), float(bcy), px_x_m, px_y_m, dist_m, rot1_rad, rot2_rad,
+        )
+
         ai = build_integrator(
-            detector_distance_m=float(distance_mm) * 1e-3,
+            detector_distance_m=dist_m,
             wavelength_m=wl_A * 1e-10,
-            beam_center_x=float(bcx),
-            beam_center_y=float(bcy),
-            pixel_size_x=float(px_x_um) * 1e-6,
-            pixel_size_y=float(px_y_um) * 1e-6,
-            rot1=np.deg2rad(float(rot1_deg or 0)),
-            rot2=np.deg2rad(float(rot2_deg or 0)),
-            rot3=np.deg2rad(float(rot3_deg or 0)),
+            beam_center_x=poni_x,
+            beam_center_y=poni_y,
+            pixel_size_x=px_x_m,
+            pixel_size_y=px_y_m,
+            rot1=rot1_rad,
+            rot2=rot2_rad,
+            rot3=rot3_rad,
         )
     except Exception as exc:
         return _error_figure(f"Integrator error: {exc}")
@@ -1056,15 +1083,16 @@ def parse_poni(contents, filename):
         wavelength_A = round(ai.wavelength * 1e10, 6)           # m → Å
         energy_keV   = round((h * c) / (eV * ai.wavelength) / 1000, 4)  # m → keV
 
-        # Beam centre -- read directly from the native PONI point (in
-        # pixels), NOT ai.getFit2D(). Fit2D's "centerX/centerY" is a
-        # different point on the detector once there's any tilt (rot1/rot2),
-        # and build_integrator() below reconstructs poni1/poni2 straight
-        # from these pixel values, so extraction and reconstruction must
-        # use the same convention or the rebuilt geometry is simply wrong
-        # whenever the detector is tilted.
-        bcx = round(ai.poni2 / ai.detector.pixel2, 2)
-        bcy = round(ai.poni1 / ai.detector.pixel1, 2)
+        # Beam centre via getFit2D (pixels) -- the physical pixel where the
+        # direct beam actually hits the detector, i.e. what looks like "the
+        # beam centre" when you inspect the image. This is NOT the same
+        # point as the PONI once the detector is tilted (rot1/rot2 != 0);
+        # run_integration()/run_cake() convert this back to the PONI point
+        # via fit2d_beam_center_to_poni_pixels() before building the
+        # integrator, using whatever Rot1/Rot2 currently say.
+        fit2d = ai.getFit2D()
+        bcx   = round(fit2d["centerX"], 2)
+        bcy   = round(fit2d["centerY"], 2)
 
         # Pixel sizes μm
         px_x_um = round(ai.detector.pixel2 * 1e6, 4)   # pixel2 → X

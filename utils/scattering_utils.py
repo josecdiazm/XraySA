@@ -203,6 +203,55 @@ def build_pixel_mask(
 
 # ── Azimuthal integration ─────────────────────────────────────────────────────
 
+def fit2d_beam_center_to_poni_pixels(
+    beam_center_x: float,
+    beam_center_y: float,
+    pixel_size_x: float,
+    pixel_size_y: float,
+    detector_distance_m: float,
+    rot1: float,
+    rot2: float,
+) -> tuple[float, float]:
+    """
+    Convert a Fit2D-style beam centre (the pixel where the direct,
+    undeviated beam actually hits the detector -- what looks like "the
+    beam centre" when you inspect an image) into the PONI point expressed
+    in the same pixel units, given the detector's current tilt (rot1, rot2).
+
+    This exists because pyFAI's native geometry is defined by the PONI
+    point (poni1, poni2), not by the physical beam-spot location -- the two
+    only coincide when rot1 == rot2 == 0. Once the detector is tilted,
+    naively treating a Fit2D-style beam centre as the PONI point silently
+    builds the wrong geometry. Formula matches pyFAI's own
+    convert_to_Fit2d/convert_from_Fit2d (pyFAI/geometry/fit2d.py): PONI =
+    beam centre (in metres) minus a tilt-dependent offset of size
+    directDist * sin(tilt), split between axes by the tilt-plane-rotation
+    direction.
+
+    detector_distance_m is pyFAI's native `dist` (distance to the PONI
+    plane) -- Fit2D's `directDist` (distance to the actual beam spot) is
+    derived internally as dist / cos(tilt).
+
+    Returns (poni_x_px, poni_y_px), a drop-in replacement for
+    beam_center_x/y in build_integrator().
+    """
+    cos_tilt = np.cos(rot1) * np.cos(rot2)
+    sin_tilt = np.sqrt(max(0.0, 1.0 - cos_tilt ** 2))
+
+    if sin_tilt < 1e-12:
+        # No tilt: the PONI point and the Fit2D beam centre are identical.
+        return beam_center_x, beam_center_y
+
+    cos_tpr = np.clip(-np.cos(rot2) * np.sin(rot1) / sin_tilt, -1.0, 1.0)
+    sin_tpr = np.sin(rot2) / sin_tilt
+    direct_dist_m = detector_distance_m / cos_tilt
+
+    poni1_m = beam_center_y * pixel_size_y - direct_dist_m * sin_tilt * sin_tpr
+    poni2_m = beam_center_x * pixel_size_x - direct_dist_m * sin_tilt * cos_tpr
+
+    return poni2_m / pixel_size_x, poni1_m / pixel_size_y
+
+
 def build_integrator(
     *,
     detector_distance_m: float,
@@ -222,7 +271,10 @@ def build_integrator(
     ----------
     detector_distance_m  : sample-to-detector distance in **metres**
     wavelength_m         : X-ray wavelength in **metres**
-    beam_center_x/y      : beam centre in **pixels** (x = col, y = row)
+    beam_center_x/y      : the PONI point, in **pixels** (x = col, y = row)
+                            -- NOT the Fit2D beam-spot pixel unless rot1 ==
+                            rot2 == 0. Run fit2d_beam_center_to_poni_pixels()
+                            first if you have a Fit2D-style beam centre.
     pixel_size_x/y       : pixel pitch in **metres**
     rot1/rot2/rot3        : detector rotations in **radians** (pyFAI/poni convention)
     """
