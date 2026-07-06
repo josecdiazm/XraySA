@@ -22,13 +22,40 @@ X-ray Scattering Analysis Tools — a Dash web app for reducing and analyzing fi
 
 Requires Python 3.
 
+**macOS / Linux:**
+
 ```bash
-git clone git@github.com:josecdiazm/XraySA.git
+git clone https://github.com/josecdiazm/XraySA.git
 cd XraySA
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/josecdiazm/XraySA.git
+cd XraySA
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Notes for Windows:
+- If `Activate.ps1` fails because script execution is disabled, run
+  `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` once, then
+  retry the activation line.
+- If `python` isn't recognized, or points to an unexpected install (e.g.
+  MSYS2/Git Bash's Python instead of a normal Windows one), check
+  `Get-Command python -All` to see every `python.exe` on your PATH, and
+  either reorder PATH or invoke the correct one directly by its full path,
+  e.g. `& "C:\Users\<you>\AppData\Local\Programs\Python\Python3xx\python.exe" -m venv venv`.
+- The clone URL above uses HTTPS, not SSH — it works with no GitHub login
+  or SSH key needed, since this repo is public. If you get a
+  `Permission denied (publickey)` error, you're likely using an
+  `git@github.com:...`-style SSH URL instead; switch to the HTTPS one shown
+  here.
 
 ## Running
 
@@ -37,6 +64,23 @@ python app.py
 ```
 
 The app runs at [http://127.0.0.1:8050](http://127.0.0.1:8050).
+
+## Updating
+
+If you cloned this repo with `git`, pull the latest changes and reinstall
+dependencies (in case new ones were added):
+
+```bash
+cd XraySA
+git pull
+pip install -r requirements.txt
+```
+
+If you instead downloaded a ZIP of the repo rather than using `git clone`,
+there's no update command — download a fresh ZIP from
+[the repo's main branch](https://github.com/josecdiazm/XraySA/archive/refs/heads/main.zip)
+and replace the old folder. If you expect to update regularly, it's worth
+switching to `git clone` once so future updates are just `git pull`.
 
 ## Notes
 
