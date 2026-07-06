@@ -1056,10 +1056,15 @@ def parse_poni(contents, filename):
         wavelength_A = round(ai.wavelength * 1e10, 6)           # m → Å
         energy_keV   = round((h * c) / (eV * ai.wavelength) / 1000, 4)  # m → keV
 
-        # Beam centre via getFit2D (pixels)
-        fit2d = ai.getFit2D()
-        bcx   = round(fit2d["centerX"], 2)
-        bcy   = round(fit2d["centerY"], 2)
+        # Beam centre -- read directly from the native PONI point (in
+        # pixels), NOT ai.getFit2D(). Fit2D's "centerX/centerY" is a
+        # different point on the detector once there's any tilt (rot1/rot2),
+        # and build_integrator() below reconstructs poni1/poni2 straight
+        # from these pixel values, so extraction and reconstruction must
+        # use the same convention or the rebuilt geometry is simply wrong
+        # whenever the detector is tilted.
+        bcx = round(ai.poni2 / ai.detector.pixel2, 2)
+        bcy = round(ai.poni1 / ai.detector.pixel1, 2)
 
         # Pixel sizes μm
         px_x_um = round(ai.detector.pixel2 * 1e6, 4)   # pixel2 → X
