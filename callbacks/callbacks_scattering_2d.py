@@ -406,6 +406,12 @@ def run_integration(
         plot_bgcolor="black",
         paper_bgcolor="white",
         font=dict(family="Arial", size=14, color="black"),
+        # Stashes the intended "home" range for assets/qspace_reset_axes_fix.js:
+        # meta is untouched by Plotly's own zoom/pan/reset machinery, so it's
+        # a reliable place for the client to read the true detector-only
+        # bounds back from, regardless of how the user has since zoomed/panned.
+        meta={"homeRangeX": [float(qx.min()), float(qx.max())],
+              "homeRangeY": [float(qy.min()), float(qy.max())]},
         xaxis=dict(
             range=[float(qx.min()), float(qx.max())],
             autorange=False,   # lock to the heatmap's own data extent — the

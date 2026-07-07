@@ -439,6 +439,9 @@ def run_gi_integration(
         plot_bgcolor="black",
         paper_bgcolor="white",
         font=dict(family="Arial", size=14, color="black"),
+        # Stashes the intended "home" range for assets/qspace_reset_axes_fix.js
+        # -- see the matching comment in callbacks_scattering_2d.py.
+        meta={"homeRangeX": xaxis_range, "homeRangeY": yaxis_range},
         xaxis=dict(
             range=xaxis_range,
             autorange=False,

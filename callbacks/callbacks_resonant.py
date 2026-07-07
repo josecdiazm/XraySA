@@ -390,6 +390,10 @@ def run_reson_integration(
         plot_bgcolor="black",
         paper_bgcolor="white",
         font=dict(family="Arial", size=14, color="black"),
+        # Stashes the intended "home" range for assets/qspace_reset_axes_fix.js
+        # -- see the matching comment in callbacks_scattering_2d.py.
+        meta={"homeRangeX": [float(qx.min()), float(qx.max())],
+              "homeRangeY": [float(qy.min()), float(qy.max())]},
         xaxis=dict(
             range=[float(qx.min()), float(qx.max())],
             autorange=False,

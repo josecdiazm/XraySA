@@ -8,14 +8,25 @@
 // trace that extends past the detector image, so clicking it can zoom out
 // further than the detector itself.
 //
-// This restores each plot's own "home" range (whatever Dash most recently
-// set) every time that button's reset is detected, by watching for the
-// {"xaxis.autorange": true, "yaxis.autorange": true} relayout event Plotly
-// sends specifically for Reset Axes / Autoscale, and immediately relayout-
-// ing back to the last range Dash actually rendered.
+// Fix: each callback stashes the intended "home" range in the figure's own
+// layout.meta (see callbacks_scattering_2d.py / callbacks_gisaxs.py /
+// callbacks_resonant.py) -- meta is inert to Plotly's own zoom/pan/reset
+// machinery, so it only ever changes when Dash actually pushes a new
+// figure. This watches for the {"xaxis.autorange": true, ...} relayout
+// event Plotly sends specifically for Reset Axes / Autoscale, and
+// immediately relayouts back to whatever meta currently says.
+//
+// Critical: the arrays read from meta must be cloned (.slice()) before
+// being handed to Plotly.relayout. Plotly.relayout("xaxis.range", arr)
+// stores that exact array object as gd.layout.xaxis.range -- so if arr is
+// the same array object as gd.layout.meta.homeRangeX, the next zoom's
+// in-place mutation of gd.layout.xaxis.range[0]/[1] (that's how Plotly
+// applies a box-zoom drag) silently corrupts meta too, since by then
+// they're literally the same object in memory. First-hand tested: without
+// the clone, this fix works exactly once and then silently breaks on the
+// second zoom+reset.
 (function () {
     var TARGET_IDS = ["scat-2d-q-graph", "gi-2d-graph", "reson-2d-q-graph"];
-    var homeRanges = {};   // keyed by target id -- each plot tracks its own
     var correcting = {};
 
     function findGraphDiv(targetId) {
@@ -28,30 +39,21 @@
         if (!gd || gd.dataset.resetAxesFixBound) return;
         gd.dataset.resetAxesFixBound = "1";
 
-        // Every genuine data-driven redraw (a fresh figure pushed by Dash)
-        // fires plotly_afterplot; plain user pan/zoom only fires
-        // plotly_relayout, not afterplot -- so this only re-baselines
-        // "home" when the server actually sent new axis bounds.
-        gd.on("plotly_afterplot", function () {
-            if (correcting[targetId]) return;
-            var xr = gd.layout && gd.layout.xaxis && gd.layout.xaxis.range;
-            var yr = gd.layout && gd.layout.yaxis && gd.layout.yaxis.range;
-            if (xr && yr) {
-                homeRanges[targetId] = { x: xr.slice(), y: yr.slice() };
-            }
-        });
-
         gd.on("plotly_relayout", function (eventData) {
-            var home = homeRanges[targetId];
-            if (correcting[targetId] || !home) return;
+            if (correcting[targetId]) return;
             var isReset = eventData && (eventData["xaxis.autorange"] === true ||
                                          eventData["yaxis.autorange"] === true);
             if (!isReset) return;
 
+            var meta = gd.layout && gd.layout.meta;
+            var homeX = meta && meta.homeRangeX && meta.homeRangeX.slice();
+            var homeY = meta && meta.homeRangeY && meta.homeRangeY.slice();
+            if (!homeX || !homeY) return;
+
             correcting[targetId] = true;
             Plotly.relayout(gd, {
-                "xaxis.range": home.x,
-                "yaxis.range": home.y,
+                "xaxis.range": homeX,
+                "yaxis.range": homeY,
                 "xaxis.autorange": false,
                 "yaxis.autorange": false,
             }).then(function () { correcting[targetId] = false; })
