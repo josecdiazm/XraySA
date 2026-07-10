@@ -256,6 +256,33 @@ def _gi_qrange_section():
                 className="w-100",
             ),
         ], style={"marginTop": "6px"}),
+
+        # Click-to-read-out: click a point on the 1-D plot to see its Q
+        # value and the corresponding d-spacing.
+        html.Div([
+            html.Span(
+                "q (Å⁻¹)",
+                style={"fontWeight": "500", "marginRight": "6px"},
+            ),
+            dcc.Input(
+                id="gi-click-q-value",
+                type="text",
+                value="",
+                disabled=True,
+                style={"width": "90px", "marginRight": "18px"},
+            ),
+            html.Span(
+                "d (Å)",
+                style={"fontWeight": "500", "marginRight": "6px"},
+            ),
+            dcc.Input(
+                id="gi-click-d-value",
+                type="text",
+                value="",
+                disabled=True,
+                style={"width": "90px"},
+            ),
+        ], style={"display": "flex", "alignItems": "center", "marginTop": "10px"}),
     )
 
 

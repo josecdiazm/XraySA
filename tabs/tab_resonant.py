@@ -124,6 +124,33 @@ def _qrange_section():
             "Apply Q Range", id="reson-qrange-apply-btn",
             color="primary", size="sm", className="w-100",
         ),
+
+        # Click-to-read-out: click a point on either 1-D plot below to see
+        # its Q (or 2θ) value and the corresponding d-spacing.
+        html.Div([
+            html.Span(
+                "q (Å⁻¹)", id="reson-click-q-label",
+                style={"fontWeight": "500", "marginRight": "6px"},
+            ),
+            dcc.Input(
+                id="reson-click-q-value",
+                type="text",
+                value="",
+                disabled=True,
+                style={"width": "90px", "marginRight": "18px"},
+            ),
+            html.Span(
+                "d (Å)",
+                style={"fontWeight": "500", "marginRight": "6px"},
+            ),
+            dcc.Input(
+                id="reson-click-d-value",
+                type="text",
+                value="",
+                disabled=True,
+                style={"width": "90px"},
+            ),
+        ], style={"display": "flex", "alignItems": "center", "marginTop": "10px"}),
     )
 
 

@@ -45,6 +45,9 @@ from callbacks._shared import (
 register_folder_browse_callback("reson-folder-input")
 
 _ROI_COLORS = ["#e6194B", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4"]
+_UNIT_LABELS = {
+    "q_A^-1": "q (Å⁻¹)", "q_nm^-1": "q (nm⁻¹)", "2th_deg": "2θ (°)",
+}
 
 
 def _roi_color(index: int) -> str:
@@ -464,7 +467,7 @@ def run_reson_integration(
         )
         curves.append({"q": q.tolist(), "I": I.tolist(), "name": "I(q)", "color": "#1f77b4"})
 
-    return fig_qxy, {"curves": curves, "unit": unit}
+    return fig_qxy, {"curves": curves, "unit": unit, "wavelength_A": wl_A}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -503,10 +506,7 @@ def render_reson_1d_plot(store_data, q_range, log_y, log_x):
             line=dict(width=2.0, color=curve["color"]),
         ))
 
-    _unit_labels = {
-        "q_A^-1": "q (Å⁻¹)", "q_nm^-1": "q (nm⁻¹)", "2th_deg": "2θ (°)", "r_mm": "r (mm)",
-    }
-    xlabel = _unit_labels.get(unit, unit or "q (Å⁻¹)")
+    xlabel = _UNIT_LABELS.get(unit, unit or "q (Å⁻¹)")
     ytype = "log" if (log_y and "log" in log_y) else "linear"
     xtype = "log" if (log_x and "log" in log_x) else "linear"
     fig1d.update_layout(
@@ -533,6 +533,65 @@ def render_reson_1d_plot(store_data, q_range, log_y, log_x):
         ),
     )
     return fig1d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4.6.  Click-to-read-out: Q/2θ + d-spacing at the clicked point, on either
+#       the single-file 1-D plot or the multi-energy overlay. The overlay's
+#       curves each carry their own energy, so on a 2θ unit its wavelength
+#       is looked up per clicked curve rather than assumed global.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("reson-click-q-value", "value"),
+    Output("reson-click-d-value", "value"),
+    Output("reson-click-q-label", "children"),
+    Input("reson-1d-graph", "clickData"),
+    Input("reson-energy-graph", "clickData"),
+    State("reson-1d-data-store", "data"),
+    State("reson-energy-store", "data"),
+    prevent_initial_call=True,
+)
+def show_reson_clicked_d_spacing(click_1d, click_energy, store_1d, store_energy):
+    triggered = ctx.triggered_id
+    wavelength_A = None
+
+    if triggered == "reson-1d-graph":
+        if not click_1d or not store_1d:
+            raise PreventUpdate
+        x = click_1d["points"][0]["x"]
+        unit = store_1d.get("unit", "q_A^-1")
+        wavelength_A = store_1d.get("wavelength_A")
+    elif triggered == "reson-energy-graph":
+        if not click_energy or not store_energy:
+            raise PreventUpdate
+        point = click_energy["points"][0]
+        x = point["x"]
+        unit = store_energy.get("unit", "q_A^-1")
+        curves = store_energy.get("curves", [])
+        curve_idx = point.get("curveNumber", -1)
+        if unit == "2th_deg" and 0 <= curve_idx < len(curves):
+            energy_eV = curves[curve_idx].get("energy")
+            if energy_eV:
+                wavelength_A = energy_to_wavelength(energy_eV / 1000.0)
+    else:
+        raise PreventUpdate
+
+    d = None
+    if x:
+        if unit == "q_A^-1":
+            d = 2 * np.pi / x
+        elif unit == "q_nm^-1":
+            d = 20 * np.pi / x
+        elif unit == "2th_deg" and wavelength_A:
+            sin_theta = np.sin(np.deg2rad(x / 2.0))
+            if sin_theta > 0:
+                d = wavelength_A / (2 * sin_theta)
+
+    q_text = f"{x:.5g}" if x else ""
+    d_text = f"{d:.5g}" if d is not None else "—"
+    q_label = _UNIT_LABELS.get(unit, unit or "q (Å⁻¹)")
+    return q_text, d_text, q_label
 
 
 @callback(
@@ -892,10 +951,7 @@ def render_energy_series_plot(store_data, q_range, log_y, log_x):
         hoverinfo="skip",
     ))
 
-    _unit_labels = {
-        "q_A^-1": "q (Å⁻¹)", "q_nm^-1": "q (nm⁻¹)", "2th_deg": "2θ (°)", "r_mm": "r (mm)",
-    }
-    xlabel = _unit_labels.get(unit, unit or "q (Å⁻¹)")
+    xlabel = _UNIT_LABELS.get(unit, unit or "q (Å⁻¹)")
     ytype = "log" if (log_y and "log" in log_y) else "linear"
     xtype = "log" if (log_x and "log" in log_x) else "linear"
     fig.update_layout(

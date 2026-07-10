@@ -744,6 +744,31 @@ def render_gi_1d_plot(store_data, q_range, log_y, log_x):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 4.5.  Click-to-read-out: q + d-spacing at the clicked point (GI-SWAXS
+#       curves are always integrated in q_A^-1, so no wavelength lookup
+#       is needed here — see show_clicked_d_spacing in
+#       callbacks_scattering_2d.py for the unit-aware version).
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("gi-click-q-value", "value"),
+    Output("gi-click-d-value", "value"),
+    Input("gi-1d-graph", "clickData"),
+    prevent_initial_call=True,
+)
+def show_gi_clicked_d_spacing(click_data):
+    if not click_data:
+        raise PreventUpdate
+
+    x = click_data["points"][0]["x"]
+    d = 2 * np.pi / x if x else None
+
+    q_text = f"{x:.5g}" if x else ""
+    d_text = f"{d:.5g}" if d is not None else "—"
+    return q_text, d_text
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 5.  Apply Q Range
 # ─────────────────────────────────────────────────────────────────────────────
 

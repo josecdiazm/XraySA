@@ -171,7 +171,6 @@ def _integration_section():
                     {"label": "q (Å⁻¹)",  "value": "q_A^-1"},
                     {"label": "q (nm⁻¹)", "value": "q_nm^-1"},
                     {"label": "2θ (°)",   "value": "2th_deg"},
-                    {"label": "r (mm)",   "value": "r_mm"},
                 ],
                 value="q_A^-1",
                 clearable=False,
@@ -433,6 +432,33 @@ def _q_range_section():
                 className="w-100",
             ),
         ], style={"marginTop": "6px"}),
+
+        # Click-to-read-out: click a point on the 1-D integration plot to
+        # see its Q (or 2θ) value and the corresponding d-spacing.
+        html.Div([
+            html.Span(
+                "q (Å⁻¹)", id="scat-click-q-label",
+                style={"fontWeight": "500", "marginRight": "6px"},
+            ),
+            dcc.Input(
+                id="scat-click-q-value",
+                type="text",
+                value="",
+                disabled=True,
+                style={"width": "90px", "marginRight": "18px"},
+            ),
+            html.Span(
+                "d (Å)",
+                style={"fontWeight": "500", "marginRight": "6px"},
+            ),
+            dcc.Input(
+                id="scat-click-d-value",
+                type="text",
+                value="",
+                disabled=True,
+                style={"width": "90px"},
+            ),
+        ], style={"display": "flex", "alignItems": "center", "marginTop": "10px"}),
     )
 
 

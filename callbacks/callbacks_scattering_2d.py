@@ -40,12 +40,11 @@ from callbacks._shared import (
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 _COLORSCALES = ["Viridis", "Inferno", "Plasma", "Hot", "Greys", "Jet"]
-_UNITS       = ["q_A^-1", "q_nm^-1", "2th_deg", "r_mm"]
+_UNITS       = ["q_A^-1", "q_nm^-1", "2th_deg"]
 _UNIT_LABELS = {
     "q_A^-1":  "q (Å⁻¹)",
     "q_nm^-1": "q (nm⁻¹)",
     "2th_deg": "2θ (°)",
-    "r_mm":    "r (mm)",
 }
 
 
@@ -457,7 +456,7 @@ def run_integration(
             hovertemplate="Beam centre<br>qx=0, qy=0<extra></extra>",
         ))
 
-    store_data = {"curves": curves, "unit": unit}
+    store_data = {"curves": curves, "unit": unit, "wavelength_A": wl_A}
 
     return (
         store_data,
@@ -546,6 +545,42 @@ def update_1d_plot(q_data, q_range, log_y, log_x, unit):
     )
     return fig
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3.6.  Click-to-read-out: Q/2θ + d-spacing at the clicked point
+# ─────────────────────────────────────────────────────────────────────────────
+
+@callback(
+    Output("scat-click-q-value", "value"),
+    Output("scat-click-d-value", "value"),
+    Output("scat-click-q-label", "children"),
+    Input("scat-1d-graph", "clickData"),
+    State("scat-q-data-store", "data"),
+    prevent_initial_call=True,
+)
+def show_clicked_d_spacing(click_data, q_data):
+    if not click_data or not q_data:
+        raise PreventUpdate
+
+    x = click_data["points"][0]["x"]
+    unit = q_data.get("unit", "q_A^-1")
+    wavelength_A = q_data.get("wavelength_A")
+
+    d = None
+    if x:
+        if unit == "q_A^-1":
+            d = 2 * np.pi / x
+        elif unit == "q_nm^-1":
+            d = 20 * np.pi / x
+        elif unit == "2th_deg" and wavelength_A:
+            sin_theta = np.sin(np.deg2rad(x / 2.0))
+            if sin_theta > 0:
+                d = wavelength_A / (2 * sin_theta)
+
+    q_text = f"{x:.5g}"
+    d_text = f"{d:.5g}" if d is not None else "—"
+    q_label = _UNIT_LABELS.get(unit, unit or "q (Å⁻¹)")
+    return q_text, d_text, q_label
 
 
 # ─────────────────────────────────────────────────────────────────────────────
