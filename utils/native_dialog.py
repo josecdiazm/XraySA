@@ -35,6 +35,23 @@ path = filedialog.askdirectory(title=sys.argv[1])
 print(path)
 """
 
+_SAVE_DIALOG_SCRIPT = """
+import sys
+import tkinter as tk
+from tkinter import filedialog
+
+root = tk.Tk()
+root.withdraw()
+root.attributes("-topmost", True)
+path = filedialog.asksaveasfilename(
+    title=sys.argv[1],
+    initialfile=sys.argv[2],
+    defaultextension=".csv",
+    filetypes=[("CSV files", "*.csv"), ("Text files", "*.txt"), ("All files", "*.*")],
+)
+print(path)
+"""
+
 
 def pick_folder(prompt: str = "Select a folder") -> str | None:
     """Open a native folder-picker dialog in a dedicated subprocess.
@@ -43,6 +60,28 @@ def pick_folder(prompt: str = "Select a folder") -> str | None:
     try:
         result = subprocess.run(
             [sys.executable, "-c", _DIALOG_SCRIPT, prompt],
+            capture_output=True, text=True, timeout=120,
+        )
+    except Exception:
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    path = result.stdout.strip()
+    return path or None
+
+
+def pick_save_file(initial_filename: str = "profile.csv", prompt: str = "Save profile as") -> str | None:
+    """Open a native "Save As" dialog (pre-filled with *initial_filename*)
+    in a dedicated subprocess, for the same main-thread-tkinter reason as
+    pick_folder(). Returns the chosen absolute path (folder+filename
+    already joined by the OS dialog), or None if the user cancelled.
+    tkinter's own overwrite-confirmation prompt covers filename collisions,
+    so no separate confirmation is needed on the Dash side."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", _SAVE_DIALOG_SCRIPT, prompt, initial_filename],
             capture_output=True, text=True, timeout=120,
         )
     except Exception:

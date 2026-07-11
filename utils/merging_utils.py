@@ -1,7 +1,8 @@
 
 """
 Utility functions for the SWAXS Merging tab: averaging repeated 1-D
-scans, scaling/merging averaged SAXS and WAXS profiles, and writing
+scans, computing a profile's currently-displayed (q-trimmed,
+scaled/offset) view, subtracting/merging/scaling profiles, and writing
 results to disk.
 """
 
@@ -59,6 +60,25 @@ def read_1d_csv(file_path: str) -> dict:
     return {"q": q, "I": I, "sigma": sigma, "unit": unit}
 
 
+def apply_view(profile: dict, qmin_idx: int, qmax_idx: int, scale: float, offset: float) -> dict:
+    """
+    Return the currently-displayed view of *profile*: intensity scaled and
+    offset (always computed from the untouched raw arrays, never
+    cumulative), then trimmed to the inclusive index range
+    [qmin_idx, qmax_idx]. Never mutates *profile*.
+    """
+    I = profile["I"] * scale + offset
+    sigma = profile["sigma"] * scale if profile.get("sigma") is not None else None
+
+    lo, hi = qmin_idx, qmax_idx + 1
+    return {
+        "q": profile["q"][lo:hi],
+        "I": I[lo:hi],
+        "sigma": sigma[lo:hi] if sigma is not None else None,
+        "unit": profile["unit"],
+    }
+
+
 def average_profiles(profiles: list[dict]) -> dict:
     """Average multiple 1-D profiles onto the first profile's q grid."""
     if not profiles:
@@ -75,27 +95,64 @@ def average_profiles(profiles: list[dict]) -> dict:
             stack.append(np.interp(ref_q, p["q"], p["I"]))
 
     I_avg = np.mean(np.vstack(stack), axis=0)
-    return {"q": ref_q, "I": I_avg, "unit": unit}
+    return {"q": ref_q, "I": I_avg, "sigma": None, "unit": unit}
 
 
-def scale_profile(profile: dict, factor: float) -> dict:
-    """Return a copy of *profile* with intensity multiplied by *factor*."""
-    return {"q": profile["q"], "I": profile["I"] * factor, "unit": profile["unit"]}
-
-
-def merge_profiles(saxs: dict, waxs: dict, splice_q: float) -> dict:
+def subtract_profiles(base: dict, other: dict) -> dict:
     """
-    Splice SAXS (q <= splice_q) and WAXS (q > splice_q) into one profile,
-    sorted by q. Assumes both profiles share the same q unit.
+    Subtract *other* from *base*, interpolating *other* onto *base*'s q
+    grid if they don't already match. Propagates sigma in quadrature when
+    both profiles have it (and their q grids already match, so no
+    interpolated-uncertainty guesswork is needed).
     """
-    saxs_mask = saxs["q"] <= splice_q
-    waxs_mask = waxs["q"] > splice_q
+    if np.array_equal(base["q"], other["q"]):
+        I_other = other["I"]
+        sigma_other = other.get("sigma")
+    else:
+        I_other = np.interp(base["q"], other["q"], other["I"])
+        sigma_other = None
 
-    q = np.concatenate([saxs["q"][saxs_mask], waxs["q"][waxs_mask]])
-    I = np.concatenate([saxs["I"][saxs_mask], waxs["I"][waxs_mask]])
+    sigma = None
+    if base.get("sigma") is not None and sigma_other is not None:
+        sigma = np.sqrt(base["sigma"] ** 2 + sigma_other ** 2)
+
+    return {"q": base["q"], "I": base["I"] - I_other, "sigma": sigma, "unit": base["unit"]}
+
+
+def merge_profiles(lo: dict, hi: dict, splice_q: float) -> dict:
+    """
+    Splice *lo* (q <= splice_q) and *hi* (q > splice_q) into one profile,
+    sorted by q. Assumes both profiles share the same q unit and are
+    already scaled to match in the splice region.
+    """
+    lo_mask = lo["q"] <= splice_q
+    hi_mask = hi["q"] > splice_q
+
+    q = np.concatenate([lo["q"][lo_mask], hi["q"][hi_mask]])
+    I = np.concatenate([lo["I"][lo_mask], hi["I"][hi_mask]])
 
     order = np.argsort(q)
-    return {"q": q[order], "I": I[order], "unit": saxs["unit"]}
+    return {"q": q[order], "I": I[order], "sigma": None, "unit": lo["unit"]}
+
+
+def merge_profiles_pairwise(base: dict, others: list[dict], splice_q: float) -> dict:
+    """
+    Fold *others* into *base* one at a time, lowest-q profile first,
+    splicing each pair at *splice_q* via merge_profiles(). Directionality
+    (which of the pair is "lo" vs "hi") is decided per-pair by comparing
+    minimum q, so it doesn't matter whether *base* itself is the lower- or
+    higher-q member.
+    """
+    if not others:
+        return {"q": base["q"], "I": base["I"], "sigma": None, "unit": base["unit"]}
+
+    current = base
+    for other in sorted(others, key=lambda p: float(np.min(p["q"]))):
+        if float(np.min(current["q"])) <= float(np.min(other["q"])):
+            current = merge_profiles(current, other, splice_q)
+        else:
+            current = merge_profiles(other, current, splice_q)
+    return current
 
 
 def write_1d_csv(profile: dict, output_dir: str, filename: str) -> str:
@@ -103,8 +160,13 @@ def write_1d_csv(profile: dict, output_dir: str, filename: str) -> str:
     os.makedirs(output_dir, exist_ok=True)
     out_path = os.path.join(output_dir, filename)
 
-    header = f"{profile['unit']},I"
-    rows = [f"{qi:.6g},{Ii:.6g}" for qi, Ii in zip(profile["q"], profile["I"])]
+    sigma = profile.get("sigma")
+    if sigma is not None:
+        header = f"{profile['unit']},I,sigma"
+        rows = [f"{qi:.6g},{Ii:.6g},{si:.6g}" for qi, Ii, si in zip(profile["q"], profile["I"], sigma)]
+    else:
+        header = f"{profile['unit']},I"
+        rows = [f"{qi:.6g},{Ii:.6g}" for qi, Ii in zip(profile["q"], profile["I"])]
 
     with open(out_path, "w") as fh:
         fh.write(header + "\n" + "\n".join(rows))
