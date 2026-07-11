@@ -13,7 +13,7 @@ cross-tab State/Input — only the energy-series-specific controls are new.
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
-from tabs._shared import folder_picker
+from tabs._shared import folder_picker, spin_index_input
 from utils.resonant_utils import DEFAULT_ENERGY_PATTERN
 
 # ── Reusable style constants (mirrors tab_gisaxs.py) ──────────────────────────
@@ -108,22 +108,12 @@ def _qrange_section():
         "🔍 Q Range",
         html.Div([
             _label("Q min"),
-            dcc.Input(
-                id="reson-qrange-min", type="number", value=None, step="0.001",
-                style=_INPUT_STYLE,
-            ),
+            spin_index_input("reson-qrange-min", "reson-qrange-min-idx"),
         ], style=_ROW_STYLE),
         html.Div([
             _label("Q max"),
-            dcc.Input(
-                id="reson-qrange-max", type="number", value=None, step="0.001",
-                style=_INPUT_STYLE,
-            ),
+            spin_index_input("reson-qrange-max", "reson-qrange-max-idx"),
         ], style=_ROW_STYLE),
-        dbc.Button(
-            "Apply Q Range", id="reson-qrange-apply-btn",
-            color="primary", size="sm", className="w-100",
-        ),
 
         # Click-to-read-out: click a point on either 1-D plot below to see
         # its Q (or 2θ) value and the corresponding d-spacing.
@@ -261,6 +251,11 @@ def layout():
             dcc.Store(id="reson-energy-store", data={}),
             dcc.Store(id="reson-1d-data-store", data={}),
             dcc.Store(id="reson-qrange-store", data=None),
+            # {"min_idx", "max_idx", "q_raw"} -- q_raw is cached here (rather
+            # than re-derived at use time) since two different actions can
+            # produce curves (single-file integrate vs. energy-series run);
+            # whichever ran most recently is the "current" q array.
+            dcc.Store(id="reson-qrange-idx-store", data=None),
             dcc.Store(id="reson-upload-tempdir-store", data=None),
 
             html.Hr(style={"marginTop": "4px"}),

@@ -769,17 +769,125 @@ def show_gi_clicked_d_spacing(click_data):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5.  Apply Q Range
+# 5.  Q Range value <-> index dual-widget sync (RAW-style, matching
+#     Scattering 2D & 1D) — a fresh Integrate resets to the full q extent,
+#     and every edit (typing, spin-click) both displays and applies live;
+#     there's no separate "Apply Q Range" step anymore.
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
-    Output("gi-qrange-store", "data", allow_duplicate=True),
-    Input("gi-qrange-apply-btn", "n_clicks"),
-    State("gi-qrange-min", "value"),
-    State("gi-qrange-max", "value"),
+    Output("gi-qrange-idx-store", "data"),
+    Input("gi-integration-store", "data"),
+    State("gi-qrange-idx-store", "data"),
     prevent_initial_call=True,
 )
-def apply_gi_qrange(n_clicks, q_min, q_max):
-    if q_min is None or q_max is None:
+def reset_gi_qrange_idx(store_data, idx_store):
+    """
+    Resets to the full q extent only the first time (empty store) or when
+    the point count actually changes; a re-integration at the same point
+    count keeps whatever range the user already dialed in.
+    """
+    curves = (store_data or {}).get("curves") or []
+    if not curves:
         raise PreventUpdate
-    return {"q_min": q_min, "q_max": q_max}
+    n = len(curves[0]["x"])
+    if idx_store and idx_store.get("n") == n:
+        raise PreventUpdate
+    return {"min_idx": 0, "max_idx": max(n - 1, 0), "n": n}
+
+
+@callback(
+    Output("gi-qrange-idx-store", "data", allow_duplicate=True),
+    Input("gi-qrange-min", "value"),
+    Input("gi-qrange-max", "value"),
+    Input("gi-qrange-min-idx", "value"),
+    Input("gi-qrange-max-idx", "value"),
+    Input("gi-qrange-min-idx-up", "n_clicks"),
+    Input("gi-qrange-min-idx-down", "n_clicks"),
+    Input("gi-qrange-max-idx-up", "n_clicks"),
+    Input("gi-qrange-max-idx-down", "n_clicks"),
+    State("gi-qrange-idx-store", "data"),
+    State("gi-integration-store", "data"),
+    prevent_initial_call=True,
+)
+def manage_gi_qrange_idx_interaction(min_val, max_val, min_idx_typed, max_idx_typed,
+                                      min_up, min_down, max_up, max_down,
+                                      idx_store, store_data):
+    trigger = ctx.triggered_id
+    curves = (store_data or {}).get("curves") or []
+    if not curves or trigger is None:
+        raise PreventUpdate
+
+    q_raw = curves[0]["x"]
+    n = len(q_raw)
+    idx_store = dict(idx_store or {})
+    min_idx = idx_store.get("min_idx", 0)
+    max_idx = idx_store.get("max_idx", max(n - 1, 0))
+
+    if trigger == "gi-qrange-min":
+        if min_val is None:
+            raise PreventUpdate
+        min_idx = min(int(np.argmin(np.abs(np.array(q_raw) - float(min_val)))), max_idx)
+
+    elif trigger == "gi-qrange-max":
+        if max_val is None:
+            raise PreventUpdate
+        max_idx = max(int(np.argmin(np.abs(np.array(q_raw) - float(max_val)))), min_idx)
+
+    elif trigger == "gi-qrange-min-idx":
+        if min_idx_typed is None:
+            raise PreventUpdate
+        min_idx = max(0, min(int(min_idx_typed), max_idx))
+
+    elif trigger == "gi-qrange-max-idx":
+        if max_idx_typed is None:
+            raise PreventUpdate
+        max_idx = min(n - 1, max(int(max_idx_typed), min_idx))
+
+    elif trigger == "gi-qrange-min-idx-up":
+        if not min_up:
+            raise PreventUpdate
+        min_idx = min(min_idx + 1, max_idx)
+
+    elif trigger == "gi-qrange-min-idx-down":
+        if not min_down:
+            raise PreventUpdate
+        min_idx = max(min_idx - 1, 0)
+
+    elif trigger == "gi-qrange-max-idx-up":
+        if not max_up:
+            raise PreventUpdate
+        max_idx = min(max_idx + 1, n - 1)
+
+    elif trigger == "gi-qrange-max-idx-down":
+        if not max_down:
+            raise PreventUpdate
+        max_idx = max(max_idx - 1, min_idx)
+
+    else:
+        raise PreventUpdate
+
+    return {"min_idx": min_idx, "max_idx": max_idx, "n": n}
+
+
+@callback(
+    Output("gi-qrange-min", "value"),
+    Output("gi-qrange-max", "value"),
+    Output("gi-qrange-min-idx", "value"),
+    Output("gi-qrange-max-idx", "value"),
+    Output("gi-qrange-store", "data", allow_duplicate=True),
+    Input("gi-qrange-idx-store", "data"),
+    State("gi-integration-store", "data"),
+    prevent_initial_call=True,
+)
+def render_gi_qrange_fields(idx_store, store_data):
+    curves = (store_data or {}).get("curves") or []
+    if not curves or not idx_store:
+        raise PreventUpdate
+
+    q_raw = curves[0]["x"]
+    min_idx = idx_store.get("min_idx", 0)
+    max_idx = idx_store.get("max_idx", len(q_raw) - 1)
+    q_min = round(float(q_raw[min_idx]), 6)
+    q_max = round(float(q_raw[max_idx]), 6)
+    return q_min, q_max, min_idx, max_idx, {"q_min": q_min, "q_max": q_max}

@@ -41,7 +41,11 @@ _ICON_BTN_STYLE = {
     "fontSize": "0.9rem", "padding": "0px 3px", "lineHeight": "1",
 }
 _ROW_LABEL_STYLE = {"fontSize": "0.75rem", "color": "#6c757d", "width": "34px", "flexShrink": "0"}
-_ROW_INPUT_STYLE = {"width": "70px", "fontSize": "0.8rem", "padding": "3px 5px", "marginRight": "6px"}
+_ROW_INPUT_VPAD = 3 / 1.1  # vertical padding (px) for q Min/q Max/Scale/Offset input boxes
+_ROW_INPUT_STYLE = {
+    "width": "70px", "fontSize": "0.8rem",
+    "padding": f"{_ROW_INPUT_VPAD:.3g}px 5px", "marginRight": "6px",
+}
 _ROW_CONTROL_ROW_STYLE = {"display": "flex", "alignItems": "center", "marginBottom": "2px", "flexWrap": "wrap"}
 
 _SPIN_BTN_STYLE = {
@@ -68,6 +72,20 @@ def _spin_input(field_type: str, rid: str, value, **input_kwargs):
                         style={**_SPIN_BTN_STYLE, "borderRadius": "0 0 2px 2px"}),
         ], style={"display": "flex", "flexDirection": "column", "marginRight": "6px"}),
     ], style={"display": "flex", "alignItems": "center"})
+
+
+def _parse_decimals(text: str) -> int:
+    """Digits after the decimal point in *text* (0 if there isn't one) —
+    mirrors RAW's FloatSpinCtrl.OnScaleChange, which recomputes this from
+    whatever's currently typed every time the field is edited."""
+    text = text.strip().replace(",", ".")
+    return len(text.split(".", 1)[1]) if "." in text else 0
+
+
+def _step_for(decimals: int) -> float:
+    """The spin-button step implied by *decimals* — RAW's `1 / ScaleDivider`,
+    where ScaleDivider = 10**decimals (or 1 for a whole-number field)."""
+    return 10 ** -decimals if decimals > 0 else 1.0
 
 
 def _log_axes_layout(unit: str, **extra) -> dict:
@@ -117,6 +135,8 @@ def _new_row(filename: str, profile: dict, *, source: str, color: str) -> dict:
         "qmax_idx": max(n - 1, 0),
         "scale": 1.0,
         "offset": 0.0,
+        "scale_decimals": 1,   # matches RAW's own default display "1.0" / "0.0"
+        "offset_decimals": 1,
         "visible": True,
         "selected": False,
         "starred": False,
@@ -293,12 +313,16 @@ def manage_row_interactions(select_clicks, eye_clicks, star_clicks, locate_click
     elif kind == "merge-row-scale":
         if new_value is None:
             raise PreventUpdate
-        row["scale"] = float(new_value)
+        text = str(new_value)
+        row["scale"] = float(text.replace(",", "."))
+        row["scale_decimals"] = _parse_decimals(text)
 
     elif kind == "merge-row-offset":
         if new_value is None:
             raise PreventUpdate
-        row["offset"] = float(new_value)
+        text = str(new_value)
+        row["offset"] = float(text.replace(",", "."))
+        row["offset_decimals"] = _parse_decimals(text)
 
     else:
         raise PreventUpdate
@@ -309,10 +333,10 @@ def manage_row_interactions(select_clicks, eye_clicks, star_clicks, locate_click
 # ─────────────────────────────────────────────────────────────────────────────
 # 2.5.  RAW-style spin buttons (▲/▼) for q-index / Scale / Offset — see
 #       _spin_input()'s docstring for why these are explicit buttons rather
-#       than a native HTML number-input spinner.
+#       than a native HTML number-input spinner. Scale/Offset's step tracks
+#       the number of decimals currently typed in that field (see
+#       _parse_decimals/_step_for), exactly like RAW's FloatSpinCtrl.
 # ─────────────────────────────────────────────────────────────────────────────
-
-_SPIN_STEP = 0.01  # matches RAW's FloatSpinCtrl default (1 / ScaleDivider, ScaleDivider=100)
 
 @callback(
     Output("merge-profile-store", "data", allow_duplicate=True),
@@ -349,13 +373,25 @@ def handle_spin_buttons(qmin_up, qmin_down, qmax_up, qmax_down,
     elif kind == "merge-row-qmax-idx-down":
         row["qmax_idx"] = max(row["qmax_idx"] - 1, row["qmin_idx"])
     elif kind == "merge-row-scale-up":
-        row["scale"] = round(row["scale"] + _SPIN_STEP, 6)
+        step = _step_for(row["scale_decimals"])
+        row["scale"] = round(row["scale"] + step, max(row["scale_decimals"], 0))
     elif kind == "merge-row-scale-down":
-        row["scale"] = round(row["scale"] - _SPIN_STEP, 6)
+        step = _step_for(row["scale_decimals"])
+        newval = round(row["scale"] - step, max(row["scale_decimals"], 0))
+        if newval <= 0.0:
+            # Scale is never_negative in RAW too — rather than land on/below
+            # zero, refine to one more decimal and step by that instead
+            # (0.1 -> 0.09, 0.01 -> 0.009, ...).
+            row["scale_decimals"] += 1
+            step = _step_for(row["scale_decimals"])
+            newval = round(row["scale"] - step, row["scale_decimals"])
+        row["scale"] = newval
     elif kind == "merge-row-offset-up":
-        row["offset"] = round(row["offset"] + _SPIN_STEP, 6)
+        step = _step_for(row["offset_decimals"])
+        row["offset"] = round(row["offset"] + step, max(row["offset_decimals"], 0))
     elif kind == "merge-row-offset-down":
-        row["offset"] = round(row["offset"] - _SPIN_STEP, 6)
+        step = _step_for(row["offset_decimals"])
+        row["offset"] = round(row["offset"] - step, max(row["offset_decimals"], 0))
     else:
         raise PreventUpdate
 
@@ -419,9 +455,11 @@ def _row_component(row: dict):
         ], style=_ROW_CONTROL_ROW_STYLE),
         html.Div([
             html.Span("Scale", style=_ROW_LABEL_STYLE),
-            _spin_input("merge-row-scale", rid, row["scale"], type="number", step="any"),
+            _spin_input("merge-row-scale", rid, f"{row['scale']:.{row['scale_decimals']}f}",
+                        type="number", step="any"),
             html.Span("Offset", style={**_ROW_LABEL_STYLE, "marginLeft": "128px"}),
-            _spin_input("merge-row-offset", rid, row["offset"], type="number", step="any"),
+            _spin_input("merge-row-offset", rid, f"{row['offset']:.{row['offset_decimals']}f}",
+                        type="number", step="any"),
         ], style=_ROW_CONTROL_ROW_STYLE),
     ], style={"marginTop": "4px", "marginLeft": "18px"})
 
@@ -518,7 +556,9 @@ def render_main_plot(store):
             name=name, visible=row["visible"],
             line=dict(width=3.0 if row["located"] else 1.5, color=row["color"]),
         ))
-    fig.update_layout(**_log_axes_layout(unit, showlegend=False))
+    fig.update_layout(**_log_axes_layout(
+        unit, showlegend=False, margin=dict(l=10, r=10, t=40, b=10),
+    ))
     return fig
 
 

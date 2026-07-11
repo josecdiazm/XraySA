@@ -201,9 +201,9 @@ def render_2d_image(image_data, colorscale, log_scale, mask_low, mask_high, cbar
 @callback(
     #Output("scat-1d-graph", "figure"),
     Output("scat-q-data-store", "data"),       # ← was scat-1d-graph
-    Output("scat-qrange-store", "data"),        # ← new
-    # Output("scat-qrange-min", "value"),         # ← new (auto-populate)
-    # Output("scat-qrange-max", "value"),         # ← new (auto-populate)
+    # scat-qrange-store is no longer touched here — it's kept in sync with
+    # scat-qrange-idx-store by render_qrange_fields on every integration
+    # (see that callback's docstring for why this one used to fight it).
     Output("scat-integration-store", "data"),
     Output("scat-2d-q-graph", "figure"),
     Input("scat-integrate-btn", "n_clicks"),
@@ -302,7 +302,7 @@ def run_integration(
         )
     except Exception as exc:
         empty = _error_figure(f"Integrator error: {exc}")
-        return no_update, no_update, no_update, empty
+        return no_update, no_update, empty
 
     # ── Mask ─────────────────────────────────────────────────────────────────
     mask = apply_threshold_mask(arr, low=mask_low, high=mask_high)
@@ -323,7 +323,7 @@ def run_integration(
                     error_model=error_model or None,
                 )
             except Exception as exc:
-                return no_update, no_update, no_update, _error_figure(f"Integration error: {exc}")
+                return no_update, no_update, _error_figure(f"Integration error: {exc}")
             curves.append({
                 "q": q.tolist(), "I": I.tolist(),
                 "sigma": sigma.tolist() if sigma is not None else None,
@@ -341,7 +341,7 @@ def run_integration(
                 error_model=error_model or None,
             )
         except Exception as exc:
-            return no_update, no_update, no_update, _error_figure(f"Integration error: {exc}")
+            return no_update, no_update, _error_figure(f"Integration error: {exc}")
         curves.append({
             "q": q.tolist(), "I": I.tolist(),
             "sigma": sigma.tolist() if sigma is not None else None,
@@ -357,7 +357,7 @@ def run_integration(
             mask=mask,
         )
     except Exception as exc:
-        return no_update, no_update, no_update, _error_figure(f"Integrator error: {exc}")
+        return no_update, no_update, _error_figure(f"Integrator error: {exc}")
 
     
     # Apply threshold mask (same logic as pixel-space image)
@@ -460,7 +460,6 @@ def run_integration(
 
     return (
         store_data,
-        None,   # ← qrange-store starts empty, meaning "no filter applied yet"
         store_data,
         fig_qxy,
     )
@@ -531,7 +530,7 @@ def update_1d_plot(q_data, q_range, log_y, log_x, unit):
         plot_bgcolor="white",
         paper_bgcolor="white",
         font=dict(family="Arial", size=14, color="black"),
-        legend=dict(font=dict(size=10)),
+        showlegend=False,
         xaxis=dict(
             showgrid=True, gridcolor="#e5e5e5", linecolor="black", mirror=True,
             ticks="outside", exponentformat="power", showexponent="all",
@@ -584,20 +583,152 @@ def show_clicked_d_spacing(click_data, q_data):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.5.5.  Apply Q Range callback
+# 3.5.4b.  Q Range value <-> index dual-widget sync (RAW-style, matching the
+#          SWAXS Merging tab's per-row q Min/q Max controls). A small
+#          scat-qrange-idx-store holds {"min_idx","max_idx"} as the single
+#          source of truth; the value/index display fields are pure renders
+#          of it (never both an Input and Output of the same callback),
+#          matching the store-driven pattern used throughout this app.
 # ─────────────────────────────────────────────────────────────────────────────
 
 @callback(
-    Output("scat-qrange-store", "data", allow_duplicate=True),
-    Input("scat-apply-qrange-btn", "n_clicks"),
-    State("scat-qrange-min", "value"),
-    State("scat-qrange-max", "value"),
+    Output("scat-qrange-idx-store", "data"),
+    Input("scat-q-data-store", "data"),
+    State("scat-qrange-idx-store", "data"),
     prevent_initial_call=True,
 )
-def apply_q_range(n_clicks, q_min, q_max):
-    if q_min is None or q_max is None:
+def reset_qrange_idx(q_data, idx_store):
+    """
+    The Q Range fields reset to the full q extent only the first time
+    (empty store, e.g. right after a page load) or when the point count
+    actually changes (old indices wouldn't mean the same thing against a
+    differently-sized array). Otherwise a re-integration at the same
+    point count keeps whatever range the user already dialed in.
+    """
+    curves = (q_data or {}).get("curves") or []
+    if not curves:
         raise PreventUpdate
-    return {"q_min": q_min, "q_max": q_max}
+    n = len(curves[0]["q"])
+    if idx_store and idx_store.get("n") == n:
+        raise PreventUpdate
+    return {"min_idx": 0, "max_idx": max(n - 1, 0), "n": n}
+
+
+@callback(
+    Output("scat-qrange-idx-store", "data", allow_duplicate=True),
+    Input("scat-qrange-min", "value"),
+    Input("scat-qrange-max", "value"),
+    Input("scat-qrange-min-idx", "value"),
+    Input("scat-qrange-max-idx", "value"),
+    Input("scat-qrange-min-idx-up", "n_clicks"),
+    Input("scat-qrange-min-idx-down", "n_clicks"),
+    Input("scat-qrange-max-idx-up", "n_clicks"),
+    Input("scat-qrange-max-idx-down", "n_clicks"),
+    State("scat-qrange-idx-store", "data"),
+    State("scat-q-data-store", "data"),
+    prevent_initial_call=True,
+)
+def manage_qrange_idx_interaction(min_val, max_val, min_idx_typed, max_idx_typed,
+                                   min_up, min_down, max_up, max_down,
+                                   idx_store, q_data):
+    trigger = ctx.triggered_id
+    curves = (q_data or {}).get("curves") or []
+    if not curves or trigger is None:
+        raise PreventUpdate
+
+    q_raw = curves[0]["q"]
+    n = len(q_raw)
+    idx_store = dict(idx_store or {})
+    min_idx = idx_store.get("min_idx", 0)
+    max_idx = idx_store.get("max_idx", max(n - 1, 0))
+
+    if trigger == "scat-qrange-min":
+        if min_val is None:
+            raise PreventUpdate
+        min_idx = min(int(np.argmin(np.abs(np.array(q_raw) - float(min_val)))), max_idx)
+
+    elif trigger == "scat-qrange-max":
+        if max_val is None:
+            raise PreventUpdate
+        max_idx = max(int(np.argmin(np.abs(np.array(q_raw) - float(max_val)))), min_idx)
+
+    elif trigger == "scat-qrange-min-idx":
+        if min_idx_typed is None:
+            raise PreventUpdate
+        min_idx = max(0, min(int(min_idx_typed), max_idx))
+
+    elif trigger == "scat-qrange-max-idx":
+        if max_idx_typed is None:
+            raise PreventUpdate
+        max_idx = min(n - 1, max(int(max_idx_typed), min_idx))
+
+    elif trigger == "scat-qrange-min-idx-up":
+        if not min_up:
+            raise PreventUpdate
+        min_idx = min(min_idx + 1, max_idx)
+
+    elif trigger == "scat-qrange-min-idx-down":
+        if not min_down:
+            raise PreventUpdate
+        min_idx = max(min_idx - 1, 0)
+
+    elif trigger == "scat-qrange-max-idx-up":
+        if not max_up:
+            raise PreventUpdate
+        max_idx = min(max_idx + 1, n - 1)
+
+    elif trigger == "scat-qrange-max-idx-down":
+        if not max_down:
+            raise PreventUpdate
+        max_idx = max(max_idx - 1, min_idx)
+
+    else:
+        raise PreventUpdate
+
+    return {"min_idx": min_idx, "max_idx": max_idx, "n": n}
+
+
+@callback(
+    Output("scat-qrange-min", "value"),
+    Output("scat-qrange-max", "value"),
+    Output("scat-qrange-min-idx", "value"),
+    Output("scat-qrange-max-idx", "value"),
+    Output("scat-qrange-store", "data"),
+    Input("scat-qrange-idx-store", "data"),
+    Input("scat-q-data-store", "data"),
+    prevent_initial_call=True,
+)
+def render_qrange_fields(idx_store, q_data):
+    """
+    Renders the value/index display fields AND applies the filter live —
+    there's no separate "Apply Q Range" button/step anymore, since the
+    fields are already always valid (cross-clamped, snapped to real data
+    points), so every edit (typing, spin-click, or a fresh Integrate) both
+    displays and applies in the same step.
+
+    Also the sole writer of scat-qrange-store (run_integration no longer
+    touches it) — this must fire on *every* Integrate click, not just ones
+    where scat-qrange-idx-store's value actually changes, otherwise a
+    same-point-count re-integration (which correctly leaves the idx-store
+    alone, keeping your dialed-in range) would leave scat-qrange-store
+    stuck at whatever run_integration last set it to, showing unfiltered
+    data instead of your range. Watching scat-q-data-store directly is
+    what guarantees that.
+    """
+    curves = (q_data or {}).get("curves") or []
+    if not curves or not idx_store:
+        raise PreventUpdate
+
+    q_raw = curves[0]["q"]
+    n = len(q_raw)
+    # Defensive clamp: normally n-tracking in reset_qrange_idx guarantees
+    # idx_store's bounds already match this q_raw, but don't index past the
+    # end if they ever fall out of sync.
+    max_idx = min(idx_store.get("max_idx", n - 1), n - 1)
+    min_idx = min(idx_store.get("min_idx", 0), max_idx)
+    q_min = round(float(q_raw[min_idx]), 6)
+    q_max = round(float(q_raw[max_idx]), 6)
+    return q_min, q_max, min_idx, max_idx, {"q_min": q_min, "q_max": q_max}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -14,6 +14,8 @@ are new.
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
+from tabs._shared import spin_index_input
+
 # ── Reusable style constants (mirrors tab_scattering_2d.py) ───────────────────
 _LABEL_STYLE  = {"width": "160px", "flexShrink": "0", "fontWeight": "500"}
 _ROW_STYLE    = {"display": "flex", "alignItems": "center", "marginBottom": "8px"}
@@ -227,35 +229,13 @@ def _gi_qrange_section():
 
         html.Div([
             _label("Q min"),
-            dcc.Input(
-                id="gi-qrange-min",
-                type="number",
-                value=None,
-                step="0.001",
-                style=_INPUT_STYLE,
-            ),
+            spin_index_input("gi-qrange-min", "gi-qrange-min-idx"),
         ], style=_ROW_STYLE),
 
         html.Div([
             _label("Q max"),
-            dcc.Input(
-                id="gi-qrange-max",
-                type="number",
-                value=None,
-                step="0.001",
-                style=_INPUT_STYLE,
-            ),
+            spin_index_input("gi-qrange-max", "gi-qrange-max-idx"),
         ], style=_ROW_STYLE),
-
-        html.Div([
-            dbc.Button(
-                "Apply Q Range",
-                id="gi-qrange-apply-btn",
-                color="primary",
-                size="sm",
-                className="w-100",
-            ),
-        ], style={"marginTop": "6px"}),
 
         # Click-to-read-out: click a point on the 1-D plot to see its Q
         # value and the corresponding d-spacing.
@@ -312,6 +292,7 @@ def layout():
             dcc.Store(id="gi-horiz-regions-store", data=[]),
             dcc.Store(id="gi-integration-store", data={}),
             dcc.Store(id="gi-qrange-store", data=None),
+            dcc.Store(id="gi-qrange-idx-store", data=None),  # {"min_idx", "max_idx"} into the current q array
 
             html.Hr(style={"marginTop": "4px"}),
 

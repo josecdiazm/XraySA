@@ -14,7 +14,8 @@ import dash_bootstrap_components as dbc
 
 from tabs._shared import folder_picker
 
-_PANEL_HEIGHT = 650  # shared height for the scrolling file list and the plot, RAW-style
+_PANEL_HEIGHT = 650  # the plot's height, RAW-style
+_LIST_HEIGHT = round(_PANEL_HEIGHT / 1.1 / 1.05)  # the scrolling file list is a bit shorter
 
 _SECTION_STYLE = {
     "backgroundColor": "#f8f9fa",
@@ -102,7 +103,7 @@ def _profiles_workspace():
                 html.Div(
                     id="merge-profile-list",
                     style={
-                        "height": f"{_PANEL_HEIGHT}px", "overflowY": "auto",
+                        "height": f"{_LIST_HEIGHT}px", "overflowY": "auto",
                         "marginBottom": "10px", "border": "1px solid #dee2e6",
                         "borderRadius": "4px", "padding": "6px", "backgroundColor": "#ffffff",
                     },

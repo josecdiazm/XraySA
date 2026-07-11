@@ -6,6 +6,8 @@ Dash layout for the 2-D scattering viewer / 1-D integrator panel.
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
+from tabs._shared import spin_index_input
+
 # ── Reusable style constants ──────────────────────────────────────────────────
 _LABEL_STYLE  = {"width": "160px", "flexShrink": "0", "fontWeight": "500"}
 _ROW_STYLE    = {"display": "flex", "alignItems": "center", "marginBottom": "8px"}
@@ -403,35 +405,13 @@ def _q_range_section():
 
         html.Div([
             _label("Q min"),
-            dcc.Input(
-                id="scat-qrange-min",
-                type="number",
-                value=None,
-                step="0.001",
-                style=_INPUT_STYLE,
-            ),
+            spin_index_input("scat-qrange-min", "scat-qrange-min-idx"),
         ], style=_ROW_STYLE),
 
         html.Div([
             _label("Q max"),
-            dcc.Input(
-                id="scat-qrange-max",
-                type="number",
-                value=None,
-                step="0.001",
-                style=_INPUT_STYLE,
-            ),
+            spin_index_input("scat-qrange-max", "scat-qrange-max-idx"),
         ], style=_ROW_STYLE),
-
-        html.Div([
-            dbc.Button(
-                "Apply Q Range",
-                id="scat-apply-qrange-btn",
-                color="primary",
-                size="sm",
-                className="w-100",
-            ),
-        ], style={"marginTop": "6px"}),
 
         # Click-to-read-out: click a point on the 1-D integration plot to
         # see its Q (or 2θ) value and the corresponding d-spacing.
@@ -476,6 +456,7 @@ def layout():
             dcc.Store(id="scat-integration-store"),
             dcc.Store(id="scat-q-data-store"),    # full q and I arrays from integration
             dcc.Store(id="scat-qrange-store"),    # currently applied q min/max
+            dcc.Store(id="scat-qrange-idx-store"),  # {"min_idx", "max_idx"} into the current q array
             dcc.Store(id="scat-pixel-mask-store", data=[]),  # hot-pixel mask regions
             dcc.Store(id="scat-azimuth-regions-store", data=[]),  # azimuthal wedge regions
             dcc.Download(id="scat-download"),

@@ -594,17 +594,132 @@ def show_reson_clicked_d_spacing(click_1d, click_energy, store_1d, store_energy)
     return q_text, d_text, q_label
 
 
+# Q Range value <-> index dual-widget sync (RAW-style, matching Scattering
+# 2D & 1D / GI-SWAXS). Two different actions can produce curves here
+# (single-file integrate vs. energy-series run), so the idx-store caches
+# whichever's q array is "current" (q_raw) rather than re-deriving it —
+# every edit both displays and applies live, no separate Apply step.
+
 @callback(
-    Output("reson-qrange-store", "data", allow_duplicate=True),
-    Input("reson-qrange-apply-btn", "n_clicks"),
-    State("reson-qrange-min", "value"),
-    State("reson-qrange-max", "value"),
+    Output("reson-qrange-idx-store", "data"),
+    Input("reson-1d-data-store", "data"),
+    Input("reson-energy-store", "data"),
+    State("reson-qrange-idx-store", "data"),
     prevent_initial_call=True,
 )
-def apply_reson_qrange(n_clicks, q_min, q_max):
-    if q_min is None or q_max is None:
+def reset_reson_qrange_idx(store_1d, store_energy, idx_store):
+    """
+    Resets to the full q extent only the first time (empty store) or when
+    the point count actually changes; otherwise re-running either action
+    (single-file integrate or energy-series) at the same point count keeps
+    whatever range the user already dialed in.
+    """
+    trigger = ctx.triggered_id
+    if trigger == "reson-1d-data-store":
+        curves = (store_1d or {}).get("curves") or []
+    elif trigger == "reson-energy-store":
+        curves = (store_energy or {}).get("curves") or []
+    else:
         raise PreventUpdate
-    return {"q_min": q_min, "q_max": q_max}
+    if not curves:
+        raise PreventUpdate
+
+    q_raw = curves[0]["q"]
+    n = len(q_raw)
+    if idx_store and len(idx_store.get("q_raw") or []) == n:
+        raise PreventUpdate
+    return {"min_idx": 0, "max_idx": max(n - 1, 0), "q_raw": q_raw}
+
+
+@callback(
+    Output("reson-qrange-idx-store", "data", allow_duplicate=True),
+    Input("reson-qrange-min", "value"),
+    Input("reson-qrange-max", "value"),
+    Input("reson-qrange-min-idx", "value"),
+    Input("reson-qrange-max-idx", "value"),
+    Input("reson-qrange-min-idx-up", "n_clicks"),
+    Input("reson-qrange-min-idx-down", "n_clicks"),
+    Input("reson-qrange-max-idx-up", "n_clicks"),
+    Input("reson-qrange-max-idx-down", "n_clicks"),
+    State("reson-qrange-idx-store", "data"),
+    prevent_initial_call=True,
+)
+def manage_reson_qrange_idx_interaction(min_val, max_val, min_idx_typed, max_idx_typed,
+                                         min_up, min_down, max_up, max_down, idx_store):
+    trigger = ctx.triggered_id
+    if not idx_store or "q_raw" not in idx_store or trigger is None:
+        raise PreventUpdate
+
+    q_raw = idx_store["q_raw"]
+    n = len(q_raw)
+    min_idx = idx_store.get("min_idx", 0)
+    max_idx = idx_store.get("max_idx", max(n - 1, 0))
+
+    if trigger == "reson-qrange-min":
+        if min_val is None:
+            raise PreventUpdate
+        min_idx = min(int(np.argmin(np.abs(np.array(q_raw) - float(min_val)))), max_idx)
+
+    elif trigger == "reson-qrange-max":
+        if max_val is None:
+            raise PreventUpdate
+        max_idx = max(int(np.argmin(np.abs(np.array(q_raw) - float(max_val)))), min_idx)
+
+    elif trigger == "reson-qrange-min-idx":
+        if min_idx_typed is None:
+            raise PreventUpdate
+        min_idx = max(0, min(int(min_idx_typed), max_idx))
+
+    elif trigger == "reson-qrange-max-idx":
+        if max_idx_typed is None:
+            raise PreventUpdate
+        max_idx = min(n - 1, max(int(max_idx_typed), min_idx))
+
+    elif trigger == "reson-qrange-min-idx-up":
+        if not min_up:
+            raise PreventUpdate
+        min_idx = min(min_idx + 1, max_idx)
+
+    elif trigger == "reson-qrange-min-idx-down":
+        if not min_down:
+            raise PreventUpdate
+        min_idx = max(min_idx - 1, 0)
+
+    elif trigger == "reson-qrange-max-idx-up":
+        if not max_up:
+            raise PreventUpdate
+        max_idx = min(max_idx + 1, n - 1)
+
+    elif trigger == "reson-qrange-max-idx-down":
+        if not max_down:
+            raise PreventUpdate
+        max_idx = max(max_idx - 1, min_idx)
+
+    else:
+        raise PreventUpdate
+
+    return {"min_idx": min_idx, "max_idx": max_idx, "q_raw": q_raw}
+
+
+@callback(
+    Output("reson-qrange-min", "value"),
+    Output("reson-qrange-max", "value"),
+    Output("reson-qrange-min-idx", "value"),
+    Output("reson-qrange-max-idx", "value"),
+    Output("reson-qrange-store", "data", allow_duplicate=True),
+    Input("reson-qrange-idx-store", "data"),
+    prevent_initial_call=True,
+)
+def render_reson_qrange_fields(idx_store):
+    if not idx_store or "q_raw" not in idx_store:
+        raise PreventUpdate
+
+    q_raw = idx_store["q_raw"]
+    min_idx = idx_store.get("min_idx", 0)
+    max_idx = idx_store.get("max_idx", len(q_raw) - 1)
+    q_min = round(float(q_raw[min_idx]), 6)
+    q_max = round(float(q_raw[max_idx]), 6)
+    return q_min, q_max, min_idx, max_idx, {"q_min": q_min, "q_max": q_max}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
