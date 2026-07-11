@@ -75,6 +75,30 @@ def _profiles_workspace():
             # Left: the accumulating file list (its own scrollable panel,
             # matching the plot's height, RAW-style) plus the action buttons.
             dbc.Col([
+                html.Div([
+                    html.Button(
+                        "☐", id="merge-select-all-btn", n_clicks=0,
+                        style={
+                            "border": "1px solid #ced4da", "background": "#f8f9fa",
+                            "cursor": "pointer", "fontSize": "0.85rem", "lineHeight": "1",
+                            "padding": "2px 6px", "borderRadius": "3px", "marginRight": "6px",
+                        },
+                        title="Select all / Deselect all",
+                    ),
+                    html.Span("Select all", style={"fontSize": "0.75rem", "color": "#6c757d", "marginRight": "14px"}),
+
+                    html.Button(
+                        "👁", id="merge-toggle-visible-btn", n_clicks=0,
+                        style={
+                            "border": "1px solid #ced4da", "background": "#f8f9fa",
+                            "cursor": "pointer", "fontSize": "0.85rem", "lineHeight": "1",
+                            "padding": "2px 6px", "borderRadius": "3px", "marginRight": "6px",
+                        },
+                        title="Show/hide all selected",
+                    ),
+                    html.Span("Show/hide selected", style={"fontSize": "0.75rem", "color": "#6c757d"}),
+                ], style={"display": "flex", "alignItems": "center", "marginBottom": "4px"}),
+
                 html.Div(
                     id="merge-profile-list",
                     style={

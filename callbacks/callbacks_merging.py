@@ -41,8 +41,33 @@ _ICON_BTN_STYLE = {
     "fontSize": "0.9rem", "padding": "0px 3px", "lineHeight": "1",
 }
 _ROW_LABEL_STYLE = {"fontSize": "0.75rem", "color": "#6c757d", "width": "34px", "flexShrink": "0"}
-_ROW_INPUT_STYLE = {"width": "56px", "fontSize": "0.75rem", "padding": "2px 4px", "marginRight": "6px"}
+_ROW_INPUT_STYLE = {"width": "70px", "fontSize": "0.8rem", "padding": "3px 5px", "marginRight": "6px"}
 _ROW_CONTROL_ROW_STYLE = {"display": "flex", "alignItems": "center", "marginBottom": "2px", "flexWrap": "wrap"}
+
+_SPIN_BTN_STYLE = {
+    "border": "1px solid #ced4da", "background": "#f8f9fa", "cursor": "pointer",
+    "fontSize": "0.5rem", "lineHeight": "1", "padding": "0px", "width": "14px", "height": "11px",
+    "display": "flex", "alignItems": "center", "justifyContent": "center", "color": "#495057",
+}
+
+
+def _spin_input(field_type: str, rid: str, value, **input_kwargs):
+    """
+    A dcc.Input paired with a RAW-style stacked up/down spin button — RAW's
+    own q-index/Scale/Offset controls are a wx.SpinButton next to a plain
+    text box (RAWCustomCtrl.py's IntSpinCtrl/FloatSpinCtrl), not a native
+    HTML number-input spinner, so we build the same explicit widget here.
+    """
+    return html.Div([
+        dcc.Input(id={"type": field_type, "index": rid}, value=value, debounce=True,
+                   style={**_ROW_INPUT_STYLE, "marginRight": "2px"}, **input_kwargs),
+        html.Div([
+            html.Button("▲", id={"type": f"{field_type}-up", "index": rid}, n_clicks=0,
+                        style={**_SPIN_BTN_STYLE, "borderBottom": "none", "borderRadius": "2px 2px 0 0"}),
+            html.Button("▼", id={"type": f"{field_type}-down", "index": rid}, n_clicks=0,
+                        style={**_SPIN_BTN_STYLE, "borderRadius": "0 0 2px 2px"}),
+        ], style={"display": "flex", "flexDirection": "column", "marginRight": "6px"}),
+    ], style={"display": "flex", "alignItems": "center"})
 
 
 def _log_axes_layout(unit: str, **extra) -> dict:
@@ -282,6 +307,62 @@ def manage_row_interactions(select_clicks, eye_clicks, star_clicks, locate_click
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 2.5.  RAW-style spin buttons (▲/▼) for q-index / Scale / Offset — see
+#       _spin_input()'s docstring for why these are explicit buttons rather
+#       than a native HTML number-input spinner.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SPIN_STEP = 0.01  # matches RAW's FloatSpinCtrl default (1 / ScaleDivider, ScaleDivider=100)
+
+@callback(
+    Output("merge-profile-store", "data", allow_duplicate=True),
+    Input({"type": "merge-row-qmin-idx-up", "index": ALL}, "n_clicks"),
+    Input({"type": "merge-row-qmin-idx-down", "index": ALL}, "n_clicks"),
+    Input({"type": "merge-row-qmax-idx-up", "index": ALL}, "n_clicks"),
+    Input({"type": "merge-row-qmax-idx-down", "index": ALL}, "n_clicks"),
+    Input({"type": "merge-row-scale-up", "index": ALL}, "n_clicks"),
+    Input({"type": "merge-row-scale-down", "index": ALL}, "n_clicks"),
+    Input({"type": "merge-row-offset-up", "index": ALL}, "n_clicks"),
+    Input({"type": "merge-row-offset-down", "index": ALL}, "n_clicks"),
+    State("merge-profile-store", "data"),
+    prevent_initial_call=True,
+)
+def handle_spin_buttons(qmin_up, qmin_down, qmax_up, qmax_down,
+                         scale_up, scale_down, offset_up, offset_down, store):
+    trigger = ctx.triggered_id
+    if not isinstance(trigger, dict) or not ctx.triggered[0]["value"]:
+        raise PreventUpdate
+
+    kind, rid = trigger["type"], trigger["index"]
+    store = list(store or [])
+    row = next((r for r in store if r["id"] == rid), None)
+    if row is None:
+        raise PreventUpdate
+
+    n = len(row["q_raw"])
+    if kind == "merge-row-qmin-idx-up":
+        row["qmin_idx"] = min(row["qmin_idx"] + 1, row["qmax_idx"])
+    elif kind == "merge-row-qmin-idx-down":
+        row["qmin_idx"] = max(row["qmin_idx"] - 1, 0)
+    elif kind == "merge-row-qmax-idx-up":
+        row["qmax_idx"] = min(row["qmax_idx"] + 1, n - 1)
+    elif kind == "merge-row-qmax-idx-down":
+        row["qmax_idx"] = max(row["qmax_idx"] - 1, row["qmin_idx"])
+    elif kind == "merge-row-scale-up":
+        row["scale"] = round(row["scale"] + _SPIN_STEP, 6)
+    elif kind == "merge-row-scale-down":
+        row["scale"] = round(row["scale"] - _SPIN_STEP, 6)
+    elif kind == "merge-row-offset-up":
+        row["offset"] = round(row["offset"] + _SPIN_STEP, 6)
+    elif kind == "merge-row-offset-down":
+        row["offset"] = round(row["offset"] - _SPIN_STEP, 6)
+    else:
+        raise PreventUpdate
+
+    return store
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 3.  Render the profile list and the main plot from the store (pure renders)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -328,23 +409,19 @@ def _row_component(row: dict):
             html.Span("q Min", style=_ROW_LABEL_STYLE),
             dcc.Input(id={"type": "merge-row-qmin-val", "index": rid}, type="number", step="any",
                       value=round(float(qmin_val), 6), debounce=True, style=_ROW_INPUT_STYLE),
-            dcc.Input(id={"type": "merge-row-qmin-idx", "index": rid}, type="number", step=1,
-                      min=0, max=max(n - 1, 0), value=row["qmin_idx"], debounce=True,
-                      style=_ROW_INPUT_STYLE),
-            html.Span("q Max", style=_ROW_LABEL_STYLE),
+            _spin_input("merge-row-qmin-idx", rid, row["qmin_idx"],
+                        type="number", step=1, min=0, max=max(n - 1, 0)),
+            html.Span("q Max", style={**_ROW_LABEL_STYLE, "marginLeft": "22px"}),
             dcc.Input(id={"type": "merge-row-qmax-val", "index": rid}, type="number", step="any",
                       value=round(float(qmax_val), 6), debounce=True, style=_ROW_INPUT_STYLE),
-            dcc.Input(id={"type": "merge-row-qmax-idx", "index": rid}, type="number", step=1,
-                      min=0, max=max(n - 1, 0), value=row["qmax_idx"], debounce=True,
-                      style=_ROW_INPUT_STYLE),
+            _spin_input("merge-row-qmax-idx", rid, row["qmax_idx"],
+                        type="number", step=1, min=0, max=max(n - 1, 0)),
         ], style=_ROW_CONTROL_ROW_STYLE),
         html.Div([
             html.Span("Scale", style=_ROW_LABEL_STYLE),
-            dcc.Input(id={"type": "merge-row-scale", "index": rid}, type="number", step="any",
-                      value=row["scale"], debounce=True, style=_ROW_INPUT_STYLE),
-            html.Span("Offset", style=_ROW_LABEL_STYLE),
-            dcc.Input(id={"type": "merge-row-offset", "index": rid}, type="number", step="any",
-                      value=row["offset"], debounce=True, style=_ROW_INPUT_STYLE),
+            _spin_input("merge-row-scale", rid, row["scale"], type="number", step="any"),
+            html.Span("Offset", style={**_ROW_LABEL_STYLE, "marginLeft": "128px"}),
+            _spin_input("merge-row-offset", rid, row["offset"], type="number", step="any"),
         ], style=_ROW_CONTROL_ROW_STYLE),
     ], style={"marginTop": "4px", "marginLeft": "18px"})
 
@@ -365,6 +442,64 @@ def render_profile_list(store):
             style={"color": "#6c757d", "fontStyle": "italic", "fontSize": "0.85rem"},
         )
     return [_row_component(row) for row in store]
+
+
+@callback(
+    Output("merge-select-all-btn", "children"),
+    Input("merge-profile-store", "data"),
+)
+def render_select_all_icon(store):
+    return "☑" if any(r["selected"] for r in (store or [])) else "☐"
+
+
+@callback(
+    Output("merge-profile-store", "data", allow_duplicate=True),
+    Input("merge-select-all-btn", "n_clicks"),
+    State("merge-profile-store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_select_all(n_clicks, store):
+    if not n_clicks:
+        raise PreventUpdate
+    store = list(store or [])
+    if not store:
+        raise PreventUpdate
+
+    select = not any(r["selected"] for r in store)
+    for r in store:
+        r["selected"] = select
+    return store
+
+
+@callback(
+    Output("merge-toggle-visible-btn", "children"),
+    Input("merge-profile-store", "data"),
+)
+def render_toggle_visible_icon(store):
+    selected = [r for r in (store or []) if r["selected"]]
+    if not selected:
+        return "👁"
+    return "👁" if all(r["visible"] for r in selected) else "🚫"
+
+
+@callback(
+    Output("merge-profile-store", "data", allow_duplicate=True),
+    Input("merge-toggle-visible-btn", "n_clicks"),
+    State("merge-profile-store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_selected_visibility(n_clicks, store):
+    if not n_clicks:
+        raise PreventUpdate
+    store = list(store or [])
+    selected = [r for r in store if r["selected"]]
+    if not selected:
+        raise PreventUpdate
+
+    show = not all(r["visible"] for r in selected)
+    for r in selected:
+        r["visible"] = show
+    return store
 
 
 @callback(
